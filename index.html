@@ -1505,7 +1505,7 @@
           }
 
           if (GLOBE.planeGroup && GLOBE.flightArcPoints?.length > 1) {
-            GLOBE.flightProgress = (GLOBE.flightProgress + 0.0012) % 1;
+            GLOBE.flightProgress = (GLOBE.flightProgress + 0.0020) % 1;
             const arcIndex = Math.floor(GLOBE.flightProgress * (GLOBE.flightArcPoints.length - 1));
             const nextIndex = Math.min(arcIndex + 1, GLOBE.flightArcPoints.length - 1);
             const current = GLOBE.flightArcPoints[arcIndex];
