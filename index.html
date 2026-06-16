@@ -1053,6 +1053,15 @@
       }
 
       const BASE_IDLE_SPEED = 0.0008;
+      const FLIGHT_LOOP_SECONDS = 38;
+      const _planeAnim = {
+        pos: new THREE.Vector3(),
+        tangent: new THREE.Vector3(),
+        lift: new THREE.Vector3(),
+        liftNext: new THREE.Vector3(),
+        worldA: new THREE.Vector3(),
+        worldB: new THREE.Vector3(),
+      };
 
       function updateFlightArc(destCode) {
         if (!GLOBE.routeLayer) return false;
@@ -1421,13 +1430,16 @@
           GLOBE_LAYOUT.cameraFocusZ
         );
 
+        const isMobileGlobe = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768;
+        GLOBE.isMobile = isMobileGlobe;
         GLOBE.renderer = new THREE.WebGLRenderer({
           canvas: globeCanvas,
-          antialias: true,
+          antialias: !isMobileGlobe,
           alpha: true,
+          powerPreference: isMobileGlobe ? 'low-power' : 'default',
         });
         GLOBE.renderer.setSize(width, height);
-        GLOBE.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        GLOBE.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobileGlobe ? 1.5 : 2));
         GLOBE.renderer.setClearColor(0x020202, 1);
         GLOBE.renderer.sortObjects = true;
 
@@ -1492,8 +1504,12 @@
 
         applyGlobeLayout();
 
-        function tick() {
+        let lastFrameTime = performance.now();
+
+        function tick(now) {
           requestAnimationFrame(tick);
+          const dt = Math.min((now - lastFrameTime) / 1000, 0.05);
+          lastFrameTime = now;
 
           const ease = GLOBE.isAnimating ? 0.055 : 0.035;
           GLOBE.currentRotation.x += (GLOBE.targetRotation.x - GLOBE.currentRotation.x) * ease;
@@ -1505,23 +1521,29 @@
           }
 
           if (GLOBE.planeGroup && GLOBE.flightArcPoints?.length > 1) {
-            GLOBE.flightProgress = (GLOBE.flightProgress + 0.0020) % 1;
-            const arcIndex = Math.floor(GLOBE.flightProgress * (GLOBE.flightArcPoints.length - 1));
-            const nextIndex = Math.min(arcIndex + 1, GLOBE.flightArcPoints.length - 1);
+            GLOBE.flightProgress = (GLOBE.flightProgress + dt / FLIGHT_LOOP_SECONDS) % 1;
+            const totalSegments = GLOBE.flightArcPoints.length - 1;
+            const exactIndex = GLOBE.flightProgress * totalSegments;
+            const arcIndex = Math.floor(exactIndex);
+            const nextIndex = Math.min(arcIndex + 1, totalSegments);
+            const segmentT = exactIndex - arcIndex;
             const current = GLOBE.flightArcPoints[arcIndex];
             const next = GLOBE.flightArcPoints[nextIndex];
-            const tangent = new THREE.Vector3().subVectors(next, current).normalize();
-            const lift = current.clone().normalize().multiplyScalar(0.04);
-            GLOBE.planeGroup.position.copy(current).add(lift);
-            GLOBE.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent);
+
+            _planeAnim.pos.copy(current).lerp(next, segmentT);
+            _planeAnim.tangent.subVectors(next, current).normalize();
+            _planeAnim.lift.copy(_planeAnim.pos).normalize().multiplyScalar(0.04);
+            GLOBE.planeGroup.position.copy(_planeAnim.pos).add(_planeAnim.lift);
+            GLOBE.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), _planeAnim.tangent);
 
             if (GLOBE.planeGroup._isSpritePlane && GLOBE.planeGroup._sprite) {
               GLOBE.globeGroup.updateMatrixWorld(true);
               const gm = GLOBE.globeGroup.matrixWorld;
-              const worldA = current.clone().add(lift).applyMatrix4(gm);
-              const worldB = next.clone().add(next.clone().normalize().multiplyScalar(0.04)).applyMatrix4(gm);
-              const sA = worldA.project(GLOBE.camera);
-              const sB = worldB.project(GLOBE.camera);
+              _planeAnim.worldA.copy(_planeAnim.pos).add(_planeAnim.lift).applyMatrix4(gm);
+              _planeAnim.liftNext.copy(next).normalize().multiplyScalar(0.04);
+              _planeAnim.worldB.copy(next).add(_planeAnim.liftNext).applyMatrix4(gm);
+              const sA = _planeAnim.worldA.project(GLOBE.camera);
+              const sB = _planeAnim.worldB.project(GLOBE.camera);
               const screenAngle = Math.atan2(sB.y - sA.y, sB.x - sA.x);
               GLOBE.planeGroup._sprite.material.rotation = screenAngle - Math.PI / 4;
             }
