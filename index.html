@@ -21,13 +21,48 @@
       }
       body {
         font-family: 'JOOX Sans Brand', sans-serif;
-        background: #020202;
+        background: #1a1a1a;
         display: flex;
         justify-content: center;
-        align-items: flex-start;
-        gap: 20px;
-        padding: 20px;
+        align-items: center;
         box-sizing: border-box;
+      }
+      .phone-frame {
+        position: relative;
+        width: 399px;
+        height: 855px;
+        border: 10px solid #2a2a2a;
+        border-radius: 50px;
+        box-shadow:
+          0 0 0 2px #111,
+          inset 0 0 0 2px #111,
+          0 20px 60px rgba(0,0,0,0.6),
+          0 0 30px rgba(0,0,0,0.4);
+        overflow: hidden;
+        background: #020202;
+        flex-shrink: 0;
+      }
+      .phone-notch-bar {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 126px;
+        height: 28px;
+        background: #020202;
+        border-radius: 0 0 18px 18px;
+        z-index: 100;
+      }
+      .phone-notch-bar::before {
+        content: '';
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 10px;
+        height: 10px;
+        background: #1a1a1a;
+        border-radius: 50%;
       }
       #globe-stage {
         position: relative;
@@ -133,7 +168,10 @@
     </style>
   </head>
   <body>
-    <div class="relative w-[375px] h-[815px] overflow-hidden bg-[rgb(2,2,2)] shrink-0">
+    <div class="phone-frame">
+      <div class="phone-notch-bar"></div>
+      <div style="position:absolute;bottom:6px;left:50%;transform:translateX(-50%);width:134px;height:5px;background:rgba(255,255,255,0.2);border-radius:3px;z-index:100;"></div>
+    <div class="relative w-[375px] h-[815px] overflow-hidden bg-[rgb(2,2,2)] shrink-0" style="margin:0 auto;">
       <div id="globe-stage" class="absolute left-0 top-0 z-[1]">
         <canvas id="globe-canvas"></canvas>
       </div>
@@ -266,6 +304,7 @@
         class="absolute left-0 top-0 w-[375px] h-[815px] border-0"
         style="z-index: 6; opacity: 0; pointer-events: none; transition: opacity 0.6s ease;"
       ></iframe>
+    </div>
     </div>
 
     <!-- Debug Panel -->
