@@ -1,0 +1,1974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>airport-selection-1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @font-face {
+        font-family: 'JOOX Sans Brand';
+        src: url('./static/fonts/JOOXSansBrand-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      body {
+        font-family: 'JOOX Sans Brand', sans-serif;
+        margin: 0;
+        background: #020202;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 20px;
+        padding: 20px;
+        min-height: 100vh;
+        box-sizing: border-box;
+      }
+      #globe-stage {
+        position: relative;
+        width: 375px;
+        height: 780.5px;
+        background: #020202;
+        overflow: hidden;
+      }
+      #globe-canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+      }
+      .map-vignette {
+        background: linear-gradient(
+          180deg,
+          rgba(2, 2, 2, 0.45) 0%,
+          rgba(2, 2, 2, 0.08) 38%,
+          rgba(2, 2, 2, 0.35) 72%,
+          rgba(2, 2, 2, 0.82) 100%
+        );
+      }
+      #timeline-track {
+        touch-action: none;
+        cursor: grab;
+        user-select: none;
+        overflow: hidden;
+        position: relative;
+      }
+      #timeline-track:active {
+        cursor: grabbing;
+      }
+      #timeline-strip {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        height: 46px;
+        will-change: transform;
+      }
+      .timeline-node {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        height: 46px;
+        gap: 3.73px;
+      }
+      .time-label {
+        height: 13px;
+        line-height: 12.31px;
+        transition: color 0.18s ease, opacity 0.18s ease;
+      }
+      .time-tick-slot {
+        height: 29.5px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .time-tick {
+        width: 1.5px;
+        height: 14.5px;
+        border-radius: 0.93px;
+        background: rgb(255, 255, 255);
+        opacity: 0.3;
+        transition: opacity 0.18s ease;
+      }
+      .timeline-center-indicator {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3.73px;
+        z-index: 2;
+      }
+      .timeline-center-indicator .center-tick {
+        width: 1.5px;
+        height: 29.5px;
+        border-radius: 0.93px;
+        background: rgb(255, 215, 0);
+      }
+      .airport-card {
+        transition: border-color 0.25s ease, transform 0.25s ease, opacity 0.25s ease;
+      }
+      .airport-card.is-active {
+        border-color: rgb(255, 215, 0);
+      }
+      #debug-panel::-webkit-scrollbar {
+        width: 4px;
+      }
+      #debug-panel::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      #debug-panel::-webkit-scrollbar-thumb {
+        background: #444;
+        border-radius: 2px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="relative w-[375px] h-[815px] overflow-hidden bg-[rgb(2,2,2)] shrink-0">
+      <div id="globe-stage" class="absolute left-0 top-0 z-[1]">
+        <canvas id="globe-canvas"></canvas>
+      </div>
+      <div id="map-vignette" class="map-vignette absolute left-0 top-0 z-[2] w-[375px] h-[780.5px] pointer-events-none" style="transition: opacity 0.6s ease;"></div>
+
+      <!-- Top nav -->
+      <div class="absolute left-[25px] top-[53.5px] z-[3] flex flex-row items-center gap-x-[63.5px]">
+        <img
+          id="page-back-btn"
+          src="./static/back-btn_ac53cf.svg"
+          class="w-[40px] h-[40px] rounded-[20px] overflow-hidden"
+          style="object-fit: cover; cursor: pointer;"
+          alt="Back"
+        />
+        <div
+          class="w-[118.5px] flex flex-row justify-center items-center gap-x-[7.08px] py-[9.45px] px-[14.17px] rounded-[118.08px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.1)] [backdrop-filter:blur(14.17px)]"
+        >
+          <div class="relative w-[16px] h-[16px] overflow-hidden">
+            <img
+              src="./static/Vector_769897.svg"
+              class="absolute left-[2px] top-[2px] w-[11px] h-[12px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div class="text-[14.17px] font-medium leading-[17px] text-white whitespace-nowrap">Study</div>
+        </div>
+        <img
+          id="globe-style-toggle"
+          src="./static/route-btn_1c6475.svg"
+          class="w-[40px] h-[40px] rounded-[20px] overflow-hidden"
+          style="object-fit: cover; cursor: pointer;"
+          alt="Toggle globe style"
+        />
+      </div>
+
+      <!-- Status bar -->
+      <div class="absolute left-0 top-0 z-[4] w-[375px] h-[41px] flex flex-row justify-between items-center px-[22.39px]">
+        <div class="text-[13.99px] font-semibold leading-[16.79px] text-white whitespace-nowrap">9:41</div>
+        <div class="flex flex-row items-center gap-x-[5.6px]">
+          <div class="relative w-[16.5px] h-[16.5px] overflow-hidden">
+            <img
+              src="./static/Vector_5fe579.svg"
+              class="absolute left-0 top-[4.5px] w-[12px] h-[10px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div class="relative w-[16.5px] h-[16.5px] overflow-hidden">
+            <img
+              src="./static/Vector_4878a4.svg"
+              class="absolute left-0 top-[2.5px] w-[15.5px] h-[12px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div
+            class="w-[23px] h-[11px] flex flex-row p-[0.93px] rounded-[2.8px] border border-white"
+          >
+            <div class="w-[16.5px] h-[9px] rounded-[0.93px] bg-white"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom panel -->
+      <div id="bottom-panel" class="absolute left-0 top-[500px] z-[5] w-[375px] flex flex-col gap-y-[18.66px] p-[22.39px]" style="transition: opacity 0.6s ease;">
+        <!-- Airport cards -->
+        <div id="airport-row" class="self-stretch w-[330px] flex flex-row gap-x-[11.19px]">
+          <div
+            class="airport-card flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="0"
+            data-code="HKG"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">HKG</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              香港国际机场
+            </div>
+          </div>
+          <div
+            class="airport-card flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="1"
+            data-code="PEK"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">PEK</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              北京首都国际机场
+            </div>
+          </div>
+          <div
+            class="airport-card flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="2"
+            data-code="PVG"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">PVG</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              上海浦东国际机场
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline panel -->
+        <div
+          class="self-stretch w-[330px] flex flex-col gap-y-[16px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+        >
+          <div class="self-stretch flex flex-col gap-y-[14.93px]">
+            <div id="timeline-track" class="relative self-stretch w-full h-[46px]">
+              <div id="timeline-strip"></div>
+              <div class="timeline-center-indicator" aria-hidden="true">
+                <div class="center-tick"></div>
+              </div>
+            </div>
+            <div class="self-stretch h-[1.5px] opacity-10 bg-white"></div>
+          </div>
+          <div
+            id="reserve-btn"
+            class="self-stretch h-[55.5px] flex flex-row justify-center items-center rounded-[93.28px] bg-white"
+            style="cursor: pointer;"
+          >
+            <div class="text-[16.79px] font-bold leading-[20.15px] text-black whitespace-nowrap pointer-events-none">
+              Reserve Ticket
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ticket page iframe -->
+      <iframe
+        id="ticket-frame"
+        src="./ticket/index.html"
+        class="absolute left-0 top-0 w-[375px] h-[815px] border-0"
+        style="z-index: 6; opacity: 0; pointer-events: none; transition: opacity 0.6s ease;"
+      ></iframe>
+    </div>
+
+    <!-- Debug Panel -->
+    <div id="debug-panel" style="
+      display: none;
+      width: 260px;
+      max-height: 780px;
+      overflow-y: auto;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 16px;
+      color: #eee;
+      font-family: 'JOOX Sans Brand', system-ui, sans-serif;
+      font-size: 13px;
+      flex-shrink: 0;
+    ">
+      <div style="font-size: 15px; font-weight: 700; margin-bottom: 14px; color: #ffd700;">🌐 地球风格调试</div>
+      <div id="style-buttons" style="display: flex; flex-direction: column; gap: 6px;"></div>
+
+      <div style="height: 1px; background: #333; margin: 16px 0;"></div>
+      <div style="font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #aaa;">光照 & 大气参数</div>
+
+      <div id="lighting-sliders"></div>
+    </div>
+
+    <script type="module">
+      import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+
+      const ORIGIN_AIRPORT = 'LAX';
+
+      const AIRPORT_COORDS = {
+        SZX: [22.6394, 113.8106],
+        HKG: [22.308, 113.9185],
+        PEK: [40.0799, 116.6031],
+        PVG: [31.1443, 121.8083],
+        BKK: [13.69, 100.7501],
+        SIN: [1.3644, 103.9915],
+        NRT: [35.772, 140.3929],
+        LHR: [51.47, -0.4543],
+        CDG: [49.0097, 2.5479],
+        FRA: [50.0379, 8.5622],
+        SYD: [-33.9399, 151.1753],
+        MEL: [-37.6733, 144.8433],
+        JFK: [40.6413, -73.7781],
+        LAX: [33.9416, -118.4085],
+        YYZ: [43.6777, -79.6248],
+      };
+
+      const AIRPORTS = {
+        SZX: { name: '深圳宝安国际机场', english: 'Shenzhen Baoan International Airport' },
+        HKG: { name: '香港国际机场', english: 'Hong Kong International Airport' },
+        PEK: { name: '北京首都国际机场', english: 'Beijing Capital International Airport' },
+        PVG: { name: '上海浦东国际机场', english: 'Shanghai Pudong International Airport' },
+        BKK: { name: '素万那普国际机场', english: 'Suvarnabhumi Airport' },
+        SIN: { name: '樟宜国际机场', english: 'Changi Airport' },
+        NRT: { name: '成田国际机场', english: 'Narita International Airport' },
+        LHR: { name: '希思罗机场', english: 'Heathrow Airport' },
+        CDG: { name: '戴高乐机场', english: 'Paris Charles de Gaulle Airport' },
+        FRA: { name: '法兰克福机场', english: 'Frankfurt am Main Airport' },
+        SYD: { name: '悉尼金斯福德·史密斯机场', english: 'Sydney Kingsford Smith Airport' },
+        MEL: { name: '墨尔本机场', english: 'Melbourne Airport' },
+        JFK: { name: '约翰·肯尼迪机场', english: 'John F. Kennedy International Airport' },
+        LAX: { name: '洛杉矶国际机场', english: 'Los Angeles International Airport' },
+        YYZ: { name: '多伦多皮尔逊机场', english: 'Toronto Pearson International Airport' },
+      };
+
+      function airportEntry(code) {
+        return { code, name: AIRPORTS[code].name };
+      }
+
+      const TIME_NODES = [
+        { minutes: 10, label: '10m' },
+        { minutes: 15, label: '15m' },
+        { minutes: 20, label: '20m' },
+        { minutes: 25, label: '25m' },
+        { minutes: 30, label: '30m' },
+        { minutes: 35, label: '35m' },
+        { minutes: 40, label: '40m' },
+        { minutes: 45, label: '45m' },
+        { minutes: 50, label: '50m' },
+        { minutes: 55, label: '55m' },
+        { minutes: 60, label: '1h' },
+        { minutes: 90, label: '1h30m' },
+      ];
+
+      const ROUTES = {
+        10: [airportEntry('HKG'), airportEntry('PEK'), airportEntry('PVG')],
+        15: [airportEntry('BKK'), airportEntry('SIN'), airportEntry('NRT')],
+        20: [airportEntry('LHR'), airportEntry('CDG'), airportEntry('FRA')],
+        25: [airportEntry('HKG'), airportEntry('BKK'), airportEntry('SIN')],
+        30: [airportEntry('HKG'), airportEntry('PEK'), airportEntry('PVG')],
+        35: [airportEntry('BKK'), airportEntry('SIN'), airportEntry('NRT')],
+        40: [airportEntry('SIN'), airportEntry('BKK'), airportEntry('NRT')],
+        45: [airportEntry('SYD'), airportEntry('MEL'), airportEntry('SIN')],
+        50: [airportEntry('JFK'), airportEntry('SZX'), airportEntry('YYZ')],
+        55: [airportEntry('LHR'), airportEntry('CDG'), airportEntry('FRA')],
+        60: [airportEntry('JFK'), airportEntry('LHR'), airportEntry('HKG')],
+        90: [airportEntry('JFK'), airportEntry('SYD'), airportEntry('LHR')],
+      };
+
+      const NODE_STEP = 44;
+      let selectedIndex = 4;
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartTranslate = 0;
+      let currentTranslate = 0;
+      let velocity = 0;
+      let lastMoveX = 0;
+      let lastMoveTime = 0;
+      let pendingIndex = 4;
+      let activeAirportIndex = -1;
+      let globeAnimationTimer = null;
+      let routeInteractionStarted = false;
+
+      const timelineTrack = document.getElementById('timeline-track');
+      const timelineStrip = document.getElementById('timeline-strip');
+      const airportCards = Array.from(document.querySelectorAll('.airport-card'));
+      const globeCanvas = document.getElementById('globe-canvas');
+      const globeStage = document.getElementById('globe-stage');
+
+      const GLOBE_LAYOUT_DEFAULTS = {
+        positionX: 0.54,
+        positionY: 0.18,
+        positionZ: -0.77,
+        scale: 1,
+        baseRotationX: 0.42,
+        baseRotationY: 2.32,
+        baseRotationZ: 0,
+        cameraX: 0,
+        cameraY: 0.06,
+        cameraFov: 35,
+        cameraOverviewZ: 4.55,
+        cameraFocusZ: 3.1,
+        zoomDurationMs: 850,
+        sunX: -7.9,
+        sunY: 1.6,
+        sunZ: 6,
+        sunIntensity: 3.5,
+        ambientIntensity: 2.4,
+        atmosphereOpacity: 0.22,
+        arcThickness: 0.1,
+        arcHeight: 0.9,
+        planeScale: 1,
+      };
+
+      const GLOBE_LAYOUT = { ...GLOBE_LAYOUT_DEFAULTS };
+
+      const ROUTE_LAYOUT_KEYS = [
+        'positionX',
+        'positionY',
+        'positionZ',
+        'scale',
+        'baseRotationX',
+        'baseRotationY',
+        'baseRotationZ',
+        'cameraX',
+        'cameraY',
+        'cameraFov',
+        'cameraOverviewZ',
+        'cameraFocusZ',
+      ];
+
+      const ROUTE_VIEW = {
+        positionX: 0.47,
+        positionY: 0.31,
+        positionZ: -0.69,
+        cameraX: -0.19,
+        cameraY: -0.07,
+        refFov: 20,
+        refScale: 1.32,
+        refDistance: 0.37,
+      };
+
+      const GLOBE_STYLES = {
+        realistic: {
+          label: '🌍 卫星实景',
+          type: 'phong',
+          map: './static/maps/earth-atmos.jpg',
+          normalMap: './static/maps/earth-normal.jpg',
+          specularMap: './static/maps/earth-specular.jpg',
+          shininess: 18,
+          specular: 0x444444,
+          atmosphereColor: 0x4da6ff,
+        },
+        night: {
+          label: '🌃 夜景灯光',
+          type: 'night',
+          emissiveMap: './static/maps/earth-night.png',
+          color: 0x020208,
+          emissive: 0xffddaa,
+          emissiveIntensity: 1.1,
+          atmosphereColor: 0x2233aa,
+          atmosphereOpacity: 0.28,
+        },
+        clouds: {
+          label: '☁️ 云海地球',
+          type: 'clouds',
+          map: './static/maps/earth-atmos.jpg',
+          cloudsMap: './static/maps/earth-clouds.png',
+          atmosphereColor: 0x88bbff,
+        },
+        flightTracker: {
+          label: '✈️ Flight Tracker',
+          type: 'flightTracker',
+          map: './static/maps/earth-atmos.jpg',
+          normalMap: './static/maps/earth-normal.jpg',
+          specularMap: './static/maps/earth-specular.jpg',
+          shininess: 25,
+          specular: 0x555555,
+          atmosphereColor: 0x4d8fff,
+          atmosphereOpacity: 0,
+          useShaderAtmosphere: true,
+          shaderColor: [0.3, 0.6, 1.0],
+          shaderScale: 1.25,
+          shaderIntensity: 0.6,
+        },
+        flightArc: {
+          label: '🌌 Flight Arc',
+          type: 'flightArc',
+          emissiveMap: './static/maps/earth-night.png',
+          color: 0x030310,
+          emissive: 0x3366aa,
+          emissiveIntensity: 0.7,
+          atmosphereColor: 0x2255bb,
+          atmosphereOpacity: 0,
+          useShaderAtmosphere: true,
+          shaderColor: [0.15, 0.4, 0.9],
+          shaderScale: 1.2,
+          shaderIntensity: 0.8,
+        },
+      };
+
+      const GLOBE = {
+        radius: 1,
+        currentStyle: 'clouds',
+        textureLoader: null,
+        textureCache: {},
+        earthMesh: null,
+        cloudsMesh: null,
+        shaderAtmosphere: null,
+        markerGroup: null,
+        flightArcGroup: null,
+        planeLayer: null,
+        flightArcPoints: null,
+        planeGroup: null,
+        flightProgress: 0,
+        scene: null,
+        camera: null,
+        renderer: null,
+        pivotGroup: null,
+        globeGroup: null,
+        routeLayer: null,
+        atmosphere: null,
+        sun: null,
+        ambient: null,
+        targetRotation: { x: 0, y: 0 },
+        currentRotation: { x: 0, y: 0 },
+        targetCameraZ: GLOBE_LAYOUT.cameraFocusZ,
+        currentCameraZ: GLOBE_LAYOUT.cameraFocusZ,
+        idleSpeed: 0.0008,
+        isAnimating: false,
+        routePaused: false,
+      };
+
+      function latLngToVector3(lat, lng, radius = GLOBE.radius) {
+        const phi = THREE.MathUtils.degToRad(90 - lat);
+        const theta = THREE.MathUtils.degToRad(lng + 180);
+        return new THREE.Vector3(
+          -radius * Math.sin(phi) * Math.cos(theta),
+          radius * Math.cos(phi),
+          radius * Math.sin(phi) * Math.sin(theta)
+        );
+      }
+
+      function rotationForLatLng(lat, lng) {
+        return {
+          x: THREE.MathUtils.degToRad(lat) * 0.95,
+          y: -THREE.MathUtils.degToRad(lng) + Math.PI * 0.52,
+        };
+      }
+
+      function centerLatLng(airports) {
+        const coords = airports
+          .map((airport) => AIRPORT_COORDS[airport.code])
+          .filter(Boolean);
+        if (!coords.length) return [0, 0];
+        const lat = coords.reduce((sum, c) => sum + c[0], 0) / coords.length;
+        const lng = coords.reduce((sum, c) => sum + c[1], 0) / coords.length;
+        return [lat, lng];
+      }
+
+      function buildArcPoints(lat1, lng1, lat2, lng2) {
+        const start = latLngToVector3(lat1, lng1, 1).normalize();
+        const end = latLngToVector3(lat2, lng2, 1).normalize();
+        const segments = 96;
+        const surfaceOffset = 0.006;
+        const points = [];
+
+        for (let i = 0; i <= segments; i++) {
+          const t = i / segments;
+          const v = new THREE.Vector3().copy(start).lerp(end, t).normalize();
+          v.multiplyScalar(GLOBE.radius + surfaceOffset);
+          points.push(v);
+        }
+
+        return points;
+      }
+
+      function routeFocusPoint(destCode) {
+        const from = AIRPORT_COORDS[ORIGIN_AIRPORT];
+        const to = AIRPORT_COORDS[destCode];
+        if (!from || !to) return null;
+
+        const start = latLngToVector3(from[0], from[1], 1);
+        const end = latLngToVector3(to[0], to[1], 1);
+        const mid = new THREE.Vector3().addVectors(start, end).normalize();
+        const lat = 90 - THREE.MathUtils.radToDeg(Math.acos(THREE.MathUtils.clamp(mid.y, -1, 1)));
+        const lng = THREE.MathUtils.radToDeg(Math.atan2(mid.z, -mid.x)) - 180;
+
+        return { lat, lng };
+      }
+
+      function getRouteLayout(destCode) {
+        const from = AIRPORT_COORDS[ORIGIN_AIRPORT];
+        const to = AIRPORT_COORDS[destCode];
+        if (!from || !to) return null;
+
+        const start = latLngToVector3(from[0], from[1], 1).normalize();
+        const end = latLngToVector3(to[0], to[1], 1).normalize();
+        const distance = Math.max(start.angleTo(end), 0.02);
+
+        const rotation = rotationForLatLng(from[0], from[1]);
+
+        const scale = THREE.MathUtils.clamp(2.5 / Math.sqrt(distance), 1.8, 4.5);
+        const fov = THREE.MathUtils.clamp(16 + distance * 8, 15, 28);
+        const focusZ = scale + 1.5;
+
+        return {
+          positionX: 0,
+          positionY: 0,
+          positionZ: 0,
+          scale,
+          baseRotationX: GLOBE_LAYOUT_DEFAULTS.baseRotationX - rotation.x,
+          baseRotationY: GLOBE_LAYOUT_DEFAULTS.baseRotationY - rotation.y,
+          baseRotationZ: 0,
+          cameraX: 0,
+          cameraY: 0,
+          cameraFov: fov,
+          cameraOverviewZ: Math.max(focusZ + 2.5, GLOBE_LAYOUT_DEFAULTS.cameraOverviewZ),
+          cameraFocusZ: focusZ,
+        };
+      }
+
+      function applyRouteLayout(destCode) {
+        const layout = getRouteLayout(destCode);
+        if (!layout) return false;
+
+        ROUTE_LAYOUT_KEYS.forEach((key) => {
+          if (layout[key] !== undefined) GLOBE_LAYOUT[key] = layout[key];
+        });
+
+        GLOBE.currentRotation = { x: 0, y: 0 };
+        GLOBE.targetRotation = { x: 0, y: 0 };
+        GLOBE.currentCameraZ = GLOBE_LAYOUT.cameraOverviewZ;
+        GLOBE.targetCameraZ = GLOBE_LAYOUT.cameraOverviewZ;
+        GLOBE.isAnimating = false;
+
+        applyGlobeLayout();
+        return true;
+      }
+
+      function focusOnFlightRoute(destCode) {
+        updateFlightArc(destCode);
+      }
+
+      const PLANE_STYLES = {
+        classic: '🔷 经典色块',
+        airliner: '✈️ 喷气客机',
+        sprite: '🖼️ 贴图客机',
+        fighter: '🛩️ 战斗机',
+        orb: '💡 光球轨迹',
+        arrow: '➤ 导航箭头',
+      };
+      let currentPlaneStyle = 'sprite';
+
+      function makePlaneMat(color, opts = {}) {
+        return new THREE.MeshBasicMaterial({
+          color,
+          depthTest: false,
+          depthWrite: false,
+          side: THREE.DoubleSide,
+          ...opts,
+        });
+      }
+
+      function finalizePlane(group) {
+        group.traverse((child) => {
+          if (child.isMesh || child.isSprite) {
+            child.renderOrder = 1100;
+            child.frustumCulled = false;
+          }
+        });
+        return group;
+      }
+
+      function createPlane_classic() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+        const body = makePlaneMat(0xffffff);
+        const accent = makePlaneMat(0xffd700);
+
+        const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.018 * s, 0.012 * s, 0.12 * s, 12), body);
+        fuselage.rotation.z = Math.PI / 2;
+        group.add(fuselage);
+
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.018 * s, 0.04 * s, 12), accent);
+        nose.rotation.z = -Math.PI / 2;
+        nose.position.x = 0.072 * s;
+        group.add(nose);
+
+        group.add(new THREE.Mesh(new THREE.BoxGeometry(0.13 * s, 0.005 * s, 0.05 * s), accent));
+
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.005 * s, 0.04 * s, 0.03 * s), accent);
+        tail.position.x = -0.055 * s;
+        group.add(tail);
+
+        return finalizePlane(group);
+      }
+
+      let _airlinerTexture = null;
+      function getAirlinerTexture() {
+        if (_airlinerTexture) return _airlinerTexture;
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = './static/airplane-sprite.png';
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width;
+          canvas.height = img.height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const d = imageData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const brightness = d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114;
+            if (brightness < 25) {
+              d[i + 3] = 0;
+            }
+          }
+          ctx.putImageData(imageData, 0, 0);
+          _airlinerTexture.image = canvas;
+          _airlinerTexture.needsUpdate = true;
+        };
+        _airlinerTexture = new THREE.Texture(img);
+        _airlinerTexture.colorSpace = THREE.SRGBColorSpace;
+        return _airlinerTexture;
+      }
+
+      function createPlane_airliner() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+
+        const bodyMat = makePlaneMat(0xeef0ff);
+        const accentMat = makePlaneMat(0xffd700);
+        const darkMat = makePlaneMat(0x556677);
+        const windowMat = makePlaneMat(0x88ccff);
+
+        const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.018 * s, 0.015 * s, 0.18 * s, 20), bodyMat);
+        fuselage.rotation.z = Math.PI / 2;
+        group.add(fuselage);
+
+        const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.018 * s, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), windowMat);
+        cockpit.rotation.z = -Math.PI / 2;
+        cockpit.position.x = 0.09 * s;
+        group.add(cockpit);
+
+        const noseCone = new THREE.Mesh(new THREE.ConeGeometry(0.018 * s, 0.03 * s, 20), bodyMat);
+        noseCone.rotation.z = -Math.PI / 2;
+        noseCone.position.x = 0.103 * s;
+        group.add(noseCone);
+
+        const tailCone = new THREE.Mesh(new THREE.ConeGeometry(0.015 * s, 0.04 * s, 20), bodyMat);
+        tailCone.rotation.z = Math.PI / 2;
+        tailCone.position.x = -0.105 * s;
+        group.add(tailCone);
+
+        const wingShape = new THREE.Shape();
+        wingShape.moveTo(0.025 * s, 0);
+        wingShape.lineTo(-0.035 * s, 0.1 * s);
+        wingShape.lineTo(-0.055 * s, 0.1 * s);
+        wingShape.lineTo(-0.015 * s, 0.005 * s);
+        wingShape.lineTo(-0.015 * s, -0.005 * s);
+        wingShape.lineTo(-0.055 * s, -0.1 * s);
+        wingShape.lineTo(-0.035 * s, -0.1 * s);
+        wingShape.closePath();
+        const wingGeo = new THREE.ExtrudeGeometry(wingShape, { depth: 0.006 * s, bevelEnabled: true, bevelThickness: 0.002 * s, bevelSize: 0.001 * s, bevelSegments: 2 });
+        const wing = new THREE.Mesh(wingGeo, accentMat);
+        wing.rotation.x = Math.PI / 2;
+        wing.position.y = -0.002 * s;
+        group.add(wing);
+
+        const vertTailShape = new THREE.Shape();
+        vertTailShape.moveTo(0, 0);
+        vertTailShape.lineTo(-0.01 * s, 0.05 * s);
+        vertTailShape.lineTo(-0.04 * s, 0.05 * s);
+        vertTailShape.lineTo(-0.035 * s, 0);
+        vertTailShape.closePath();
+        const vertTailGeo = new THREE.ExtrudeGeometry(vertTailShape, { depth: 0.004 * s, bevelEnabled: false });
+        const vertTail = new THREE.Mesh(vertTailGeo, accentMat);
+        vertTail.position.set(-0.06 * s, 0.005 * s, -0.002 * s);
+        group.add(vertTail);
+
+        const horizTailShape = new THREE.Shape();
+        horizTailShape.moveTo(0, 0);
+        horizTailShape.lineTo(-0.018 * s, 0.04 * s);
+        horizTailShape.lineTo(-0.028 * s, 0.04 * s);
+        horizTailShape.lineTo(-0.015 * s, 0);
+        horizTailShape.lineTo(-0.028 * s, -0.04 * s);
+        horizTailShape.lineTo(-0.018 * s, -0.04 * s);
+        horizTailShape.closePath();
+        const horizTailGeo = new THREE.ExtrudeGeometry(horizTailShape, { depth: 0.004 * s, bevelEnabled: false });
+        const horizTail = new THREE.Mesh(horizTailGeo, darkMat);
+        horizTail.rotation.x = Math.PI / 2;
+        horizTail.position.set(-0.07 * s, 0.002 * s, 0);
+        group.add(horizTail);
+
+        [-1, 1].forEach((side) => {
+          const pylonGeo = new THREE.BoxGeometry(0.012 * s, 0.01 * s, 0.004 * s);
+          const pylon = new THREE.Mesh(pylonGeo, darkMat);
+          pylon.position.set(-0.005 * s, -0.013 * s, side * 0.042 * s);
+          group.add(pylon);
+
+          const nacelle = new THREE.Mesh(new THREE.CylinderGeometry(0.009 * s, 0.008 * s, 0.032 * s, 12), darkMat);
+          nacelle.rotation.z = Math.PI / 2;
+          nacelle.position.set(-0.005 * s, -0.02 * s, side * 0.042 * s);
+          group.add(nacelle);
+
+          const intake = new THREE.Mesh(new THREE.RingGeometry(0.004 * s, 0.009 * s, 12), windowMat);
+          intake.rotation.y = Math.PI / 2;
+          intake.position.set(0.012 * s, -0.02 * s, side * 0.042 * s);
+          group.add(intake);
+        });
+
+        return finalizePlane(group);
+      }
+
+      function createPlane_sprite() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+        const size = 0.14 * s;
+
+        const texture = getAirlinerTexture();
+        const mat = new THREE.SpriteMaterial({
+          map: texture,
+          transparent: true,
+          depthTest: false,
+          depthWrite: false,
+          sizeAttenuation: true,
+          rotation: 0,
+        });
+
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(size, size, 1);
+        sprite.renderOrder = 1100;
+        sprite.frustumCulled = false;
+        group.add(sprite);
+
+        group._isSpritePlane = true;
+        group._sprite = sprite;
+
+        return group;
+      }
+
+      function createPlane_fighter() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+        const body = makePlaneMat(0xccccdd);
+        const accent = makePlaneMat(0xff6644);
+
+        const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(0.012 * s, 0.008 * s, 0.18 * s, 12), body);
+        fuselage.rotation.z = Math.PI / 2;
+        group.add(fuselage);
+
+        const noseCone = new THREE.Mesh(new THREE.ConeGeometry(0.012 * s, 0.05 * s, 12), accent);
+        noseCone.rotation.z = -Math.PI / 2;
+        noseCone.position.x = 0.115 * s;
+        group.add(noseCone);
+
+        const deltaShape = new THREE.Shape();
+        deltaShape.moveTo(0.03 * s, 0);
+        deltaShape.lineTo(-0.05 * s, 0.1 * s);
+        deltaShape.lineTo(-0.07 * s, 0.08 * s);
+        deltaShape.lineTo(-0.02 * s, 0);
+        deltaShape.lineTo(-0.07 * s, -0.08 * s);
+        deltaShape.lineTo(-0.05 * s, -0.1 * s);
+        deltaShape.closePath();
+        const deltaGeo = new THREE.ExtrudeGeometry(deltaShape, { depth: 0.003 * s, bevelEnabled: false });
+        const delta = new THREE.Mesh(deltaGeo, accent);
+        delta.rotation.x = Math.PI / 2;
+        delta.position.y = 0.001 * s;
+        group.add(delta);
+
+        const vertTail1 = new THREE.Mesh(new THREE.BoxGeometry(0.035 * s, 0.04 * s, 0.002 * s), body);
+        vertTail1.position.set(-0.06 * s, 0.022 * s, 0.012 * s);
+        vertTail1.rotation.z = -0.15;
+        group.add(vertTail1);
+
+        const vertTail2 = vertTail1.clone();
+        vertTail2.position.z = -0.012 * s;
+        group.add(vertTail2);
+
+        return finalizePlane(group);
+      }
+
+      function createPlane_orb() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+        const layers = [
+          { size: 0.025 * s, color: 0xffffff, opacity: 1 },
+          { size: 0.04 * s, color: 0xffd700, opacity: 0.5 },
+          { size: 0.06 * s, color: 0xffaa00, opacity: 0.2 },
+        ];
+        layers.forEach(({ size, color, opacity }) => {
+          const mat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity,
+            depthTest: false,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+          });
+          const mesh = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 16), mat);
+          mesh.renderOrder = 1100;
+          mesh.frustumCulled = false;
+          group.add(mesh);
+        });
+
+        return group;
+      }
+
+      function createPlane_arrow() {
+        const group = new THREE.Group();
+        const s = GLOBE_LAYOUT.planeScale;
+        const mat = makePlaneMat(0xffd700);
+
+        const arrowShape = new THREE.Shape();
+        arrowShape.moveTo(0.08 * s, 0);
+        arrowShape.lineTo(-0.03 * s, 0.04 * s);
+        arrowShape.lineTo(-0.01 * s, 0);
+        arrowShape.lineTo(-0.03 * s, -0.04 * s);
+        arrowShape.closePath();
+        const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.012 * s, bevelEnabled: false });
+        const arrow = new THREE.Mesh(arrowGeo, mat);
+        arrow.rotation.x = Math.PI / 2;
+        arrow.position.z = -0.006 * s;
+        group.add(arrow);
+
+        return finalizePlane(group);
+      }
+
+      const PLANE_CREATORS = {
+        classic: createPlane_classic,
+        airliner: createPlane_airliner,
+        sprite: createPlane_sprite,
+        fighter: createPlane_fighter,
+        orb: createPlane_orb,
+        arrow: createPlane_arrow,
+      };
+
+      function createPlaneMesh() {
+        const fn = PLANE_CREATORS[currentPlaneStyle] || createPlane_sprite;
+        return fn();
+      }
+
+      function createFlightArcGroup(points) {
+        const group = new THREE.Group();
+        const t = GLOBE_LAYOUT.arcThickness;
+        const makeMat = (color, opacity = 1) =>
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: opacity < 1,
+            opacity,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.DoubleSide,
+          });
+
+        const curve = new THREE.CatmullRomCurve3(
+          points.map((p) => p.clone()),
+          false,
+          'centripetal'
+        );
+
+        [
+          { radius: 0.04 * t, color: 0xffd700, opacity: 0.3 },
+          { radius: 0.022 * t, color: 0xffcc00, opacity: 0.85 },
+          { radius: 0.012 * t, color: 0xffea00, opacity: 1 },
+        ].forEach(({ radius, color, opacity }) => {
+          const mesh = new THREE.Mesh(
+            new THREE.TubeGeometry(curve, 96, radius, 8, false),
+            makeMat(color, opacity)
+          );
+          mesh.renderOrder = 1000;
+          mesh.frustumCulled = false;
+          group.add(mesh);
+        });
+
+        return group;
+      }
+
+      function clearFlightArc() {
+        if (GLOBE.flightArcGroup && GLOBE.routeLayer) {
+          GLOBE.routeLayer.remove(GLOBE.flightArcGroup);
+          GLOBE.flightArcGroup.traverse((child) => {
+            child.geometry?.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+              else child.material.dispose();
+            }
+          });
+          GLOBE.flightArcGroup = null;
+        }
+        if (GLOBE.planeLayer && GLOBE.routeLayer) {
+          GLOBE.routeLayer.remove(GLOBE.planeLayer);
+          GLOBE.planeLayer.traverse((child) => {
+            child.geometry?.dispose();
+            if (child.material) {
+              if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+              else child.material.dispose();
+            }
+          });
+          GLOBE.planeLayer = null;
+        }
+        GLOBE.flightArcPoints = null;
+        GLOBE.planeGroup = null;
+      }
+
+      function createEndpointMarker(position, color, size) {
+        const group = new THREE.Group();
+        const mat = new THREE.MeshBasicMaterial({
+          color,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(size, 16, 16), mat);
+        dot.renderOrder = 1050;
+        dot.frustumCulled = false;
+        group.add(dot);
+
+        const glowMat = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.35,
+          depthTest: false,
+          depthWrite: false,
+        });
+        const glow = new THREE.Mesh(new THREE.SphereGeometry(size * 2.2, 16, 16), glowMat);
+        glow.renderOrder = 1049;
+        glow.frustumCulled = false;
+        group.add(glow);
+
+        group.position.copy(position);
+        return group;
+      }
+
+      const BASE_IDLE_SPEED = 0.0008;
+
+      function updateFlightArc(destCode) {
+        if (!GLOBE.routeLayer) return false;
+        clearFlightArc();
+        if (!destCode || destCode === ORIGIN_AIRPORT) {
+          GLOBE.idleSpeed = BASE_IDLE_SPEED;
+          return false;
+        }
+
+        const from = AIRPORT_COORDS[ORIGIN_AIRPORT];
+        const to = AIRPORT_COORDS[destCode];
+        if (!from || !to) return false;
+
+        try {
+          let dLng = to[1] - from[1];
+          if (dLng > 180) dLng -= 360;
+          if (dLng < -180) dLng += 360;
+          GLOBE.idleSpeed = dLng >= 0
+            ? -Math.abs(BASE_IDLE_SPEED)
+            :  Math.abs(BASE_IDLE_SPEED);
+
+          const points = buildArcPoints(from[0], from[1], to[0], to[1]);
+          if (!points.length) return false;
+
+          GLOBE.flightArcPoints = points;
+          GLOBE.flightArcGroup = createFlightArcGroup(points);
+
+          const originPos = latLngToVector3(from[0], from[1], GLOBE.radius + 0.012);
+          const destPos = latLngToVector3(to[0], to[1], GLOBE.radius + 0.012);
+          GLOBE.flightArcGroup.add(createEndpointMarker(originPos, 0x00ccff, 0.022));
+          GLOBE.flightArcGroup.add(createEndpointMarker(destPos, 0xffd700, 0.022));
+
+          GLOBE.routeLayer.add(GLOBE.flightArcGroup);
+
+          GLOBE.planeGroup = createPlaneMesh();
+          GLOBE.planeLayer = new THREE.Group();
+          GLOBE.planeLayer.add(GLOBE.planeGroup);
+          GLOBE.routeLayer.add(GLOBE.planeLayer);
+
+          const startIndex = Math.floor(0.15 * (points.length - 1));
+          const nextIndex = Math.min(startIndex + 1, points.length - 1);
+          const current = points[startIndex];
+          const next = points[nextIndex];
+          const tangent = new THREE.Vector3().subVectors(next, current).normalize();
+          const lift = current.clone().normalize().multiplyScalar(0.04);
+          GLOBE.planeGroup.position.copy(current).add(lift);
+          GLOBE.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent);
+          GLOBE.flightProgress = 0.15;
+          return true;
+        } catch (error) {
+          console.error('updateFlightArc failed', error);
+          clearFlightArc();
+          return false;
+        }
+      }
+
+      function showFlightRoute(destCode) {
+        if (!destCode || destCode === ORIGIN_AIRPORT) {
+          GLOBE.idleSpeed = BASE_IDLE_SPEED;
+          GLOBE.routePaused = false;
+          return updateFlightArc(destCode);
+        }
+
+        const to = AIRPORT_COORDS[destCode];
+        if (!to) return false;
+
+        const rotation = rotationForLatLng(to[0], to[1]);
+        GLOBE.targetRotation.x = rotation.x;
+        GLOBE.targetRotation.y = rotation.y;
+        GLOBE.isAnimating = true;
+        GLOBE.routePaused = true;
+
+        return updateFlightArc(destCode);
+      }
+
+      function addMarkerAt(code, options = {}) {
+        const coords = AIRPORT_COORDS[code];
+        if (!coords || !GLOBE.markerGroup) return;
+
+        const {
+          active = false,
+          isOrigin = false,
+          color = isOrigin ? 0x5eead4 : active ? 0xffd700 : 0xffffff,
+          size = isOrigin ? 0.02 : active ? 0.024 : 0.018,
+        } = options;
+
+        const position = latLngToVector3(coords[0], coords[1], GLOBE.radius + 0.012);
+        const marker = new THREE.Mesh(
+          new THREE.SphereGeometry(size, 20, 20),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: isOrigin ? 1 : active ? 1 : 0.85,
+          })
+        );
+        marker.position.copy(position);
+
+        const glow = new THREE.Mesh(
+          new THREE.SphereGeometry(size * 1.6, 16, 16),
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: isOrigin ? 0.3 : active ? 0.28 : 0.12,
+          })
+        );
+        glow.position.copy(position);
+
+        GLOBE.markerGroup.add(glow);
+        GLOBE.markerGroup.add(marker);
+      }
+
+      function renderOriginMarker() {
+        addMarkerAt(ORIGIN_AIRPORT, { isOrigin: true });
+      }
+
+      function stopGlobeAnimation() {
+        if (globeAnimationTimer) {
+          clearTimeout(globeAnimationTimer);
+          globeAnimationTimer = null;
+        }
+        GLOBE.isAnimating = false;
+      }
+
+      function setGlobeTarget(lat, lng, cameraZ) {
+        const rotation = rotationForLatLng(lat, lng);
+        GLOBE.targetRotation.x = rotation.x;
+        GLOBE.targetRotation.y = rotation.y;
+        GLOBE.targetCameraZ = cameraZ;
+        GLOBE.isAnimating = true;
+      }
+
+      function applyGlobeLayout() {
+        if (!GLOBE.pivotGroup || !GLOBE.camera) return;
+
+        GLOBE.pivotGroup.position.set(
+          GLOBE_LAYOUT.positionX,
+          GLOBE_LAYOUT.positionY,
+          GLOBE_LAYOUT.positionZ
+        );
+        GLOBE.pivotGroup.scale.setScalar(GLOBE_LAYOUT.scale);
+
+        GLOBE.globeGroup.rotation.set(
+          GLOBE_LAYOUT.baseRotationX + GLOBE.currentRotation.x,
+          GLOBE_LAYOUT.baseRotationY + GLOBE.currentRotation.y,
+          GLOBE_LAYOUT.baseRotationZ
+        );
+
+        GLOBE.camera.position.set(GLOBE_LAYOUT.cameraX, GLOBE_LAYOUT.cameraY, GLOBE.currentCameraZ);
+        GLOBE.camera.fov = GLOBE_LAYOUT.cameraFov;
+        GLOBE.camera.updateProjectionMatrix();
+
+        if (GLOBE.sun) {
+          GLOBE.sun.position.set(GLOBE_LAYOUT.sunX, GLOBE_LAYOUT.sunY, GLOBE_LAYOUT.sunZ);
+          GLOBE.sun.intensity = GLOBE_LAYOUT.sunIntensity;
+        }
+        if (GLOBE.ambient) {
+          GLOBE.ambient.intensity = GLOBE_LAYOUT.ambientIntensity;
+        }
+        if (GLOBE.atmosphere?.material) {
+          GLOBE.atmosphere.material.opacity = GLOBE_LAYOUT.atmosphereOpacity;
+        }
+      }
+
+      function getGlobeTexture(url) {
+        if (!url) return null;
+        if (!GLOBE.textureCache[url]) {
+          const texture = GLOBE.textureLoader.load(url);
+          texture.colorSpace = THREE.SRGBColorSpace;
+          GLOBE.textureCache[url] = texture;
+        }
+        return GLOBE.textureCache[url];
+      }
+
+      function disposeCloudLayer() {
+        if (!GLOBE.cloudsMesh) return;
+        GLOBE.globeGroup.remove(GLOBE.cloudsMesh);
+        GLOBE.cloudsMesh.geometry.dispose();
+        GLOBE.cloudsMesh.material.dispose();
+        GLOBE.cloudsMesh = null;
+      }
+
+      function disposeShaderAtmosphere() {
+        if (!GLOBE.shaderAtmosphere) return;
+        GLOBE.globeGroup.remove(GLOBE.shaderAtmosphere);
+        GLOBE.shaderAtmosphere.geometry.dispose();
+        GLOBE.shaderAtmosphere.material.dispose();
+        GLOBE.shaderAtmosphere = null;
+      }
+
+      function createShaderAtmosphere(color, scale, intensity) {
+        disposeShaderAtmosphere();
+        const geo = new THREE.SphereGeometry(GLOBE.radius * scale, 64, 64);
+        const mat = new THREE.ShaderMaterial({
+          vertexShader: `
+            varying vec3 vNormal;
+            varying vec3 vWorldPos;
+            void main() {
+              vNormal = normalize(normalMatrix * normal);
+              vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+            }
+          `,
+          fragmentShader: `
+            uniform vec3 uColor;
+            uniform float uIntensity;
+            varying vec3 vNormal;
+            varying vec3 vWorldPos;
+            void main() {
+              float rim = pow(${intensity.toFixed(2)} - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+              gl_FragColor = vec4(uColor, 1.0) * rim * uIntensity;
+            }
+          `,
+          uniforms: {
+            uColor: { value: new THREE.Vector3(color[0], color[1], color[2]) },
+            uIntensity: { value: intensity },
+          },
+          blending: THREE.AdditiveBlending,
+          side: THREE.BackSide,
+          transparent: true,
+          depthWrite: false,
+        });
+        GLOBE.shaderAtmosphere = new THREE.Mesh(geo, mat);
+        GLOBE.globeGroup.add(GLOBE.shaderAtmosphere);
+      }
+
+      function applyGlobeStyle(styleId) {
+        const style = GLOBE_STYLES[styleId];
+        if (!style || !GLOBE.earthMesh) return;
+
+        GLOBE.currentStyle = styleId;
+        disposeCloudLayer();
+        disposeShaderAtmosphere();
+
+        const oldMaterial = GLOBE.earthMesh.material;
+        let newMaterial;
+
+        switch (style.type) {
+          case 'phong':
+            newMaterial = new THREE.MeshPhongMaterial({
+              map: getGlobeTexture(style.map),
+              normalMap: getGlobeTexture(style.normalMap),
+              specularMap: getGlobeTexture(style.specularMap),
+              specular: new THREE.Color(style.specular),
+              shininess: style.shininess,
+            });
+            break;
+          case 'night':
+            newMaterial = new THREE.MeshStandardMaterial({
+              color: style.color,
+              emissive: new THREE.Color(style.emissive),
+              emissiveMap: getGlobeTexture(style.emissiveMap),
+              emissiveIntensity: style.emissiveIntensity,
+              metalness: 0.15,
+              roughness: 0.9,
+            });
+            break;
+          case 'clouds':
+            newMaterial = new THREE.MeshPhongMaterial({
+              map: getGlobeTexture(style.map),
+              shininess: 8,
+            });
+            GLOBE.cloudsMesh = new THREE.Mesh(
+              new THREE.SphereGeometry(GLOBE.radius * 1.008, 64, 64),
+              new THREE.MeshPhongMaterial({
+                map: getGlobeTexture(style.cloudsMap),
+                transparent: true,
+                opacity: 0.42,
+                depthWrite: false,
+              })
+            );
+            GLOBE.globeGroup.add(GLOBE.cloudsMesh);
+            break;
+          case 'flightTracker':
+            newMaterial = new THREE.MeshPhongMaterial({
+              map: getGlobeTexture(style.map),
+              normalMap: getGlobeTexture(style.normalMap),
+              specularMap: getGlobeTexture(style.specularMap),
+              specular: new THREE.Color(style.specular),
+              shininess: style.shininess,
+            });
+            break;
+          case 'flightArc':
+            newMaterial = new THREE.MeshStandardMaterial({
+              color: style.color,
+              emissive: new THREE.Color(style.emissive),
+              emissiveMap: getGlobeTexture(style.emissiveMap),
+              emissiveIntensity: style.emissiveIntensity,
+              metalness: 0.2,
+              roughness: 0.8,
+            });
+            break;
+          default:
+            return;
+        }
+
+        GLOBE.earthMesh.material = newMaterial;
+        oldMaterial.dispose();
+
+        if (style.useShaderAtmosphere) {
+          createShaderAtmosphere(
+            style.shaderColor,
+            style.shaderScale,
+            style.shaderIntensity
+          );
+          if (GLOBE.atmosphere) GLOBE.atmosphere.visible = false;
+        } else {
+          if (GLOBE.atmosphere) {
+            GLOBE.atmosphere.visible = true;
+            GLOBE.atmosphere.material.color.setHex(style.atmosphereColor);
+            GLOBE.atmosphere.material.opacity =
+              style.atmosphereOpacity ?? GLOBE_LAYOUT.atmosphereOpacity;
+          }
+        }
+      }
+
+      function clearMarkers() {
+        if (!GLOBE.markerGroup) return;
+        while (GLOBE.markerGroup.children.length) {
+          const child = GLOBE.markerGroup.children[0];
+          GLOBE.markerGroup.remove(child);
+          child.geometry?.dispose();
+          child.material?.dispose();
+        }
+      }
+
+      function renderMarkers(airports, activeIndex, routeFocus = false) {
+        if (!GLOBE.markerGroup) return;
+        clearMarkers();
+
+        if (routeFocus) {
+          addMarkerAt(ORIGIN_AIRPORT, { isOrigin: true, size: 0.016 });
+          addMarkerAt(airports[activeIndex].code, { active: true, size: 0.018 });
+          return;
+        }
+
+        renderOriginMarker();
+        airports.forEach((airport, index) => {
+          addMarkerAt(airport.code, { active: index === activeIndex });
+        });
+      }
+
+      function animateGlobeView(airports, activeIndex) {
+        if (!GLOBE.globeGroup) return;
+        showFlightRoute(airports[activeIndex].code);
+      }
+
+      function focusAirport(code, cardIndex) {
+        activeAirportIndex = cardIndex;
+        showFlightRoute(code);
+      }
+
+      function initGlobe() {
+        const width = globeStage.clientWidth;
+        const height = globeStage.clientHeight;
+
+        GLOBE.scene = new THREE.Scene();
+        GLOBE.camera = new THREE.PerspectiveCamera(
+          GLOBE_LAYOUT.cameraFov,
+          width / height,
+          0.1,
+          100
+        );
+        GLOBE.camera.position.set(
+          GLOBE_LAYOUT.cameraX,
+          GLOBE_LAYOUT.cameraY,
+          GLOBE_LAYOUT.cameraFocusZ
+        );
+
+        GLOBE.renderer = new THREE.WebGLRenderer({
+          canvas: globeCanvas,
+          antialias: true,
+          alpha: true,
+        });
+        GLOBE.renderer.setSize(width, height);
+        GLOBE.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        GLOBE.renderer.setClearColor(0x020202, 1);
+        GLOBE.renderer.sortObjects = true;
+
+        GLOBE.ambient = new THREE.AmbientLight(0x8899bb, GLOBE_LAYOUT.ambientIntensity);
+        GLOBE.sun = new THREE.DirectionalLight(0xffffff, GLOBE_LAYOUT.sunIntensity);
+        GLOBE.sun.position.set(GLOBE_LAYOUT.sunX, GLOBE_LAYOUT.sunY, GLOBE_LAYOUT.sunZ);
+        GLOBE.scene.add(GLOBE.ambient, GLOBE.sun);
+
+        const starsGeometry = new THREE.BufferGeometry();
+        const starCount = 500;
+        const starPositions = new Float32Array(starCount * 3);
+        for (let i = 0; i < starCount * 3; i += 1) {
+          starPositions[i] = (Math.random() - 0.5) * 30;
+        }
+        starsGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+        const stars = new THREE.Points(
+          starsGeometry,
+          new THREE.PointsMaterial({ color: 0xffffff, size: 0.03, transparent: true, opacity: 0.55 })
+        );
+        GLOBE.scene.add(stars);
+
+        GLOBE.textureLoader = new THREE.TextureLoader();
+        GLOBE.pivotGroup = new THREE.Group();
+        GLOBE.globeGroup = new THREE.Group();
+        GLOBE.markerGroup = new THREE.Group();
+
+        const earthGeometry = new THREE.SphereGeometry(GLOBE.radius, 64, 64);
+        GLOBE.earthMesh = new THREE.Mesh(
+          earthGeometry,
+          new THREE.MeshPhongMaterial({ color: 0x224466 })
+        );
+        GLOBE.globeGroup.add(GLOBE.earthMesh);
+
+        const atmosphereGeometry = new THREE.SphereGeometry(GLOBE.radius * 1.015, 64, 64);
+        const atmosphereMaterial = new THREE.MeshPhongMaterial({
+          color: 0x4da6ff,
+          transparent: true,
+          opacity: GLOBE_LAYOUT.atmosphereOpacity,
+          side: THREE.BackSide,
+          depthWrite: false,
+        });
+        GLOBE.atmosphere = new THREE.Mesh(atmosphereGeometry, atmosphereMaterial);
+        GLOBE.globeGroup.add(GLOBE.atmosphere);
+        GLOBE.globeGroup.add(GLOBE.markerGroup);
+        GLOBE.routeLayer = new THREE.Group();
+        GLOBE.routeLayer.renderOrder = 100;
+        GLOBE.globeGroup.add(GLOBE.routeLayer);
+        GLOBE.pivotGroup.add(GLOBE.globeGroup);
+        GLOBE.scene.add(GLOBE.pivotGroup);
+
+        applyGlobeStyle('clouds');
+
+        GLOBE.currentRotation = { x: 0, y: 0 };
+        GLOBE.targetRotation = { x: 0, y: 0 };
+        GLOBE.currentCameraZ = GLOBE_LAYOUT.cameraOverviewZ;
+        GLOBE.targetCameraZ = GLOBE_LAYOUT.cameraOverviewZ;
+        GLOBE.isAnimating = false;
+
+        clearMarkers();
+        renderOriginMarker();
+        clearFlightArc();
+
+        applyGlobeLayout();
+
+        function tick() {
+          requestAnimationFrame(tick);
+
+          const ease = GLOBE.isAnimating ? 0.055 : 0.035;
+          GLOBE.currentRotation.x += (GLOBE.targetRotation.x - GLOBE.currentRotation.x) * ease;
+          GLOBE.currentRotation.y += (GLOBE.targetRotation.y - GLOBE.currentRotation.y) * ease;
+          GLOBE.currentCameraZ += (GLOBE.targetCameraZ - GLOBE.currentCameraZ) * (GLOBE.isAnimating ? 0.048 : 0.035);
+
+          if (!GLOBE.isAnimating && !globeAnimationTimer && !routeInteractionStarted && !GLOBE.routePaused) {
+            GLOBE.targetRotation.y += GLOBE.idleSpeed;
+          }
+
+          if (GLOBE.planeGroup && GLOBE.flightArcPoints?.length > 1) {
+            GLOBE.flightProgress = (GLOBE.flightProgress + 0.0012) % 1;
+            const arcIndex = Math.floor(GLOBE.flightProgress * (GLOBE.flightArcPoints.length - 1));
+            const nextIndex = Math.min(arcIndex + 1, GLOBE.flightArcPoints.length - 1);
+            const current = GLOBE.flightArcPoints[arcIndex];
+            const next = GLOBE.flightArcPoints[nextIndex];
+            const tangent = new THREE.Vector3().subVectors(next, current).normalize();
+            const lift = current.clone().normalize().multiplyScalar(0.04);
+            GLOBE.planeGroup.position.copy(current).add(lift);
+            GLOBE.planeGroup.quaternion.setFromUnitVectors(new THREE.Vector3(1, 0, 0), tangent);
+
+            if (GLOBE.planeGroup._isSpritePlane && GLOBE.planeGroup._sprite) {
+              GLOBE.globeGroup.updateMatrixWorld(true);
+              const gm = GLOBE.globeGroup.matrixWorld;
+              const worldA = current.clone().add(lift).applyMatrix4(gm);
+              const worldB = next.clone().add(next.clone().normalize().multiplyScalar(0.04)).applyMatrix4(gm);
+              const sA = worldA.project(GLOBE.camera);
+              const sB = worldB.project(GLOBE.camera);
+              const screenAngle = Math.atan2(sB.y - sA.y, sB.x - sA.x);
+              GLOBE.planeGroup._sprite.material.rotation = screenAngle - Math.PI / 4;
+            }
+          }
+
+          if (GLOBE.cloudsMesh) {
+            GLOBE.cloudsMesh.rotation.y += 0.00035;
+          }
+
+          applyGlobeLayout();
+
+          const animatingRotation =
+            Math.abs(GLOBE.targetRotation.x - GLOBE.currentRotation.x) > 0.001 ||
+            Math.abs(GLOBE.targetRotation.y - GLOBE.currentRotation.y) > 0.001 ||
+            Math.abs(GLOBE.targetCameraZ - GLOBE.currentCameraZ) > 0.01;
+
+          if (GLOBE.isAnimating && !animatingRotation && !globeAnimationTimer) {
+            GLOBE.isAnimating = false;
+          }
+
+          GLOBE.renderer.render(GLOBE.scene, GLOBE.camera);
+        }
+
+        tick();
+
+        // Globe drag-to-rotate
+        let _globeDrag = false;
+        let _globeLastX = 0;
+        let _globeLastY = 0;
+
+        globeCanvas.addEventListener('pointerdown', (e) => {
+          _globeDrag = true;
+          _globeLastX = e.clientX;
+          _globeLastY = e.clientY;
+          globeCanvas.setPointerCapture(e.pointerId);
+        });
+
+        globeCanvas.addEventListener('pointermove', (e) => {
+          if (!_globeDrag) return;
+          const dx = e.clientX - _globeLastX;
+          const dy = e.clientY - _globeLastY;
+          _globeLastX = e.clientX;
+          _globeLastY = e.clientY;
+          GLOBE.targetRotation.y += dx * 0.005;
+          GLOBE.targetRotation.x += dy * 0.005;
+          GLOBE.targetRotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, GLOBE.targetRotation.x));
+        });
+
+        const endGlobeDrag = () => { _globeDrag = false; };
+        globeCanvas.addEventListener('pointerup', endGlobeDrag);
+        globeCanvas.addEventListener('pointercancel', endGlobeDrag);
+      }
+
+      function getCurrentAirports() {
+        const time = TIME_NODES[selectedIndex].minutes;
+        return ROUTES[time];
+      }
+
+      function getTrackWidth() {
+        return timelineTrack.clientWidth;
+      }
+
+      function translateForIndex(index) {
+        return getTrackWidth() / 2 - index * NODE_STEP - NODE_STEP / 2;
+      }
+
+      function clampTranslate(value) {
+        const min = translateForIndex(TIME_NODES.length - 1);
+        const max = translateForIndex(0);
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function indexFromTranslate(translate) {
+        const centerPos = getTrackWidth() / 2 - translate - NODE_STEP / 2;
+        return Math.max(0, Math.min(TIME_NODES.length - 1, Math.round(centerPos / NODE_STEP)));
+      }
+
+      function applyStripTransform(animate) {
+        timelineStrip.style.transition = animate
+          ? 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)'
+          : 'none';
+        timelineStrip.style.transform = `translate3d(${currentTranslate}px, 0, 0)`;
+      }
+
+      function updateNodeStyles(highlightIndex = selectedIndex) {
+        timelineStrip.querySelectorAll('.timeline-node').forEach((node, index) => {
+          const active = index === highlightIndex;
+          const label = node.querySelector('.time-label');
+          const tick = node.querySelector('.time-tick');
+          label.style.color = active ? 'rgb(255, 215, 0)' : 'rgb(255, 255, 255)';
+          label.style.opacity = active ? '1' : '0.55';
+          tick.style.opacity = active ? '0' : '0.3';
+        });
+      }
+
+      function renderTimeline() {
+        timelineStrip.innerHTML = TIME_NODES.map(
+          (node, index) => `
+            <div class="timeline-node" data-index="${index}" style="width: ${NODE_STEP}px">
+              <div class="time-label text-[10.26px] font-bold whitespace-nowrap">${node.label}</div>
+              <div class="time-tick-slot">
+                <div class="time-tick"></div>
+              </div>
+            </div>
+          `
+        ).join('');
+
+        currentTranslate = translateForIndex(selectedIndex);
+        applyStripTransform(false);
+        updateNodeStyles();
+      }
+
+      function snapToIndex(index, animate = true) {
+        const next = Math.max(0, Math.min(TIME_NODES.length - 1, index));
+        const changed = next !== selectedIndex;
+        selectedIndex = next;
+        currentTranslate = translateForIndex(selectedIndex);
+        applyStripTransform(animate);
+        updateNodeStyles();
+        if (changed) updateAirports();
+      }
+
+      function updateAirports() {
+        const time = TIME_NODES[selectedIndex].minutes;
+        const airports = ROUTES[time];
+        activeAirportIndex = -1;
+
+        airportCards.forEach((card) => card.classList.add('is-updating'));
+
+        window.setTimeout(() => {
+          airportCards.forEach((card, i) => {
+            const airport = airports[i];
+            const codeEl = card.querySelector('.airport-code');
+            const nameEl = card.querySelector('.airport-name');
+            codeEl.textContent = airport.code;
+            nameEl.textContent = airport.name;
+            card.dataset.code = airport.code;
+            card.classList.remove('is-active');
+            card.classList.remove('is-updating');
+          });
+          clearFlightArc();
+          GLOBE.routePaused = false;
+          GLOBE.idleSpeed = BASE_IDLE_SPEED;
+        }, 120);
+      }
+
+      function onPointerDown(event) {
+        isDragging = true;
+        dragStartX = event.clientX;
+        dragStartTranslate = currentTranslate;
+        lastMoveX = event.clientX;
+        lastMoveTime = performance.now();
+        velocity = 0;
+        pendingIndex = selectedIndex;
+        timelineStrip.style.transition = 'none';
+        timelineTrack.setPointerCapture(event.pointerId);
+      }
+
+      function onPointerMove(event) {
+        if (!isDragging) return;
+        const now = performance.now();
+        const delta = event.clientX - dragStartX;
+        currentTranslate = clampTranslate(dragStartTranslate + delta);
+        applyStripTransform(false);
+
+        const dt = now - lastMoveTime;
+        if (dt > 0) {
+          velocity = (event.clientX - lastMoveX) / dt;
+        }
+        lastMoveX = event.clientX;
+        lastMoveTime = now;
+
+        const previewIndex = indexFromTranslate(currentTranslate);
+        if (previewIndex !== pendingIndex) {
+          pendingIndex = previewIndex;
+          updateNodeStyles(previewIndex);
+        }
+      }
+
+      function onPointerUp(event) {
+        if (!isDragging) return;
+        isDragging = false;
+        timelineTrack.releasePointerCapture(event.pointerId);
+
+        const inertiaOffset = velocity * 120;
+        const targetTranslate = clampTranslate(currentTranslate + inertiaOffset);
+        const targetIndex = indexFromTranslate(targetTranslate);
+        snapToIndex(targetIndex, true);
+      }
+
+      timelineTrack.addEventListener('pointerdown', onPointerDown);
+      timelineTrack.addEventListener('pointermove', onPointerMove);
+      timelineTrack.addEventListener('pointerup', onPointerUp);
+      timelineTrack.addEventListener('pointercancel', onPointerUp);
+
+      window.addEventListener('resize', () => {
+        renderTimeline();
+        snapToIndex(selectedIndex, false);
+        if (GLOBE.renderer && GLOBE.camera) {
+          const width = globeStage.clientWidth;
+          const height = globeStage.clientHeight;
+          GLOBE.camera.aspect = width / height;
+          GLOBE.camera.updateProjectionMatrix();
+          GLOBE.renderer.setSize(width, height);
+        }
+      });
+
+      airportCards.forEach((card) => {
+        card.addEventListener('click', () => {
+          const index = Number(card.dataset.index);
+          const code = card.dataset.code || card.querySelector('.airport-code').textContent.trim();
+          airportCards.forEach((c, i) => c.classList.toggle('is-active', i === index));
+          focusAirport(code, index);
+        });
+      });
+
+      renderTimeline();
+      initGlobe();
+
+      // --- Debug Panel ---
+      (function initDebugPanel() {
+        const btnContainer = document.getElementById('style-buttons');
+        const sliderContainer = document.getElementById('lighting-sliders');
+
+        Object.entries(GLOBE_STYLES).forEach(([id, style]) => {
+          const btn = document.createElement('button');
+          btn.textContent = style.label;
+          btn.dataset.styleId = id;
+          btn.style.cssText = `
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: ${id === GLOBE.currentStyle ? '#ffd700' : '#222'};
+            color: ${id === GLOBE.currentStyle ? '#000' : '#ddd'};
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            font-family: inherit;
+          `;
+          btn.addEventListener('mouseenter', () => {
+            if (id !== GLOBE.currentStyle) btn.style.background = '#333';
+          });
+          btn.addEventListener('mouseleave', () => {
+            if (id !== GLOBE.currentStyle) btn.style.background = '#222';
+          });
+          btn.addEventListener('click', () => {
+            applyGlobeStyle(id);
+            btnContainer.querySelectorAll('button').forEach((b) => {
+              const isActive = b.dataset.styleId === id;
+              b.style.background = isActive ? '#ffd700' : '#222';
+              b.style.color = isActive ? '#000' : '#ddd';
+            });
+          });
+          btnContainer.appendChild(btn);
+        });
+
+        // Plane style selector
+        const planeDivider = document.createElement('div');
+        planeDivider.style.cssText = 'height: 1px; background: #333; margin: 16px 0;';
+        sliderContainer.appendChild(planeDivider);
+
+        const planeTitle = document.createElement('div');
+        planeTitle.style.cssText = 'font-size: 13px; font-weight: 600; margin-bottom: 10px; color: #aaa;';
+        planeTitle.textContent = '飞机样式';
+        sliderContainer.appendChild(planeTitle);
+
+        const planeBtnWrap = document.createElement('div');
+        planeBtnWrap.style.cssText = 'display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px;';
+
+        function rebuildPlaneIfActive() {
+          if (!GLOBE.planeGroup || !GLOBE.planeLayer || !GLOBE.routeLayer) return;
+          const oldPos = GLOBE.planeGroup.position.clone();
+          const oldQuat = GLOBE.planeGroup.quaternion.clone();
+          GLOBE.planeLayer.remove(GLOBE.planeGroup);
+          GLOBE.planeGroup.traverse((c) => { c.geometry?.dispose(); c.material?.dispose(); });
+          GLOBE.planeGroup = createPlaneMesh();
+          GLOBE.planeGroup.position.copy(oldPos);
+          GLOBE.planeGroup.quaternion.copy(oldQuat);
+          GLOBE.planeLayer.add(GLOBE.planeGroup);
+        }
+
+        Object.entries(PLANE_STYLES).forEach(([id, label]) => {
+          const btn = document.createElement('button');
+          btn.textContent = label;
+          btn.dataset.planeId = id;
+          btn.style.cssText = `
+            padding: 7px 10px;
+            border-radius: 7px;
+            border: 1px solid #444;
+            background: ${id === currentPlaneStyle ? '#ffd700' : '#222'};
+            color: ${id === currentPlaneStyle ? '#000' : '#ddd'};
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: left;
+            transition: all 0.2s;
+            font-family: inherit;
+          `;
+          btn.addEventListener('click', () => {
+            currentPlaneStyle = id;
+            planeBtnWrap.querySelectorAll('button').forEach((b) => {
+              const active = b.dataset.planeId === id;
+              b.style.background = active ? '#ffd700' : '#222';
+              b.style.color = active ? '#000' : '#ddd';
+            });
+            rebuildPlaneIfActive();
+          });
+          planeBtnWrap.appendChild(btn);
+        });
+        sliderContainer.appendChild(planeBtnWrap);
+
+        const paramDivider = document.createElement('div');
+        paramDivider.style.cssText = 'height: 1px; background: #333; margin: 0 0 16px;';
+        sliderContainer.appendChild(paramDivider);
+
+        const sliders = [
+          { key: 'sunIntensity', label: '太阳强度', min: 0, max: 5, step: 0.1 },
+          { key: 'ambientIntensity', label: '环境光', min: 0, max: 4, step: 0.1 },
+          { key: 'atmosphereOpacity', label: '大气透明度', min: 0, max: 1, step: 0.01 },
+          { key: 'sunX', label: '太阳 X', min: -10, max: 10, step: 0.1 },
+          { key: 'sunY', label: '太阳 Y', min: -10, max: 10, step: 0.1 },
+          { key: 'sunZ', label: '太阳 Z', min: -10, max: 10, step: 0.1 },
+          { key: 'arcThickness', label: '航线粗细', min: 0.01, max: 1, step: 0.01 },
+          { key: 'planeScale', label: '飞机大小', min: 0.2, max: 5, step: 0.1 },
+        ];
+
+        sliders.forEach(({ key, label, min, max, step }) => {
+          const row = document.createElement('div');
+          row.style.cssText = 'margin-bottom: 10px;';
+
+          const lbl = document.createElement('div');
+          lbl.style.cssText = 'display: flex; justify-content: space-between; margin-bottom: 3px; color: #999; font-size: 12px;';
+
+          const valSpan = document.createElement('span');
+          valSpan.textContent = GLOBE_LAYOUT[key];
+          valSpan.style.color = '#ffd700';
+          lbl.innerHTML = `<span>${label}</span>`;
+          lbl.appendChild(valSpan);
+
+          const input = document.createElement('input');
+          input.type = 'range';
+          input.min = min;
+          input.max = max;
+          input.step = step;
+          input.value = GLOBE_LAYOUT[key];
+          input.style.cssText = 'width: 100%; accent-color: #ffd700; cursor: pointer;';
+          input.addEventListener('input', () => {
+            GLOBE_LAYOUT[key] = parseFloat(input.value);
+            valSpan.textContent = parseFloat(input.value).toFixed(2);
+            applyGlobeLayout();
+          });
+
+          row.appendChild(lbl);
+          row.appendChild(input);
+          sliderContainer.appendChild(row);
+        });
+
+        const jsonBtn = document.createElement('button');
+        jsonBtn.textContent = '📋 导出当前参数 JSON';
+        jsonBtn.style.cssText = `
+          margin-top: 12px;
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid #555;
+          background: #222;
+          color: #ffd700;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          width: 100%;
+          font-family: inherit;
+        `;
+        jsonBtn.addEventListener('click', () => {
+          const data = {};
+          sliders.forEach(({ key }) => { data[key] = GLOBE_LAYOUT[key]; });
+          data.currentStyle = GLOBE.currentStyle;
+          const json = JSON.stringify(data, null, 2);
+          navigator.clipboard.writeText(json).then(() => {
+            jsonBtn.textContent = '✅ 已复制到剪贴板';
+            setTimeout(() => { jsonBtn.textContent = '📋 导出当前参数 JSON'; }, 1500);
+          });
+        });
+        sliderContainer.appendChild(jsonBtn);
+      })();
+
+      // --- Globe style toggle (shuffle icon) ---
+      (function initGlobeStyleToggle() {
+        const styleKeys = Object.keys(GLOBE_STYLES);
+        const btn = document.getElementById('globe-style-toggle');
+        if (!btn) return;
+
+        btn.addEventListener('click', () => {
+          const idx = styleKeys.indexOf(GLOBE.currentStyle);
+          const nextId = styleKeys[(idx + 1) % styleKeys.length];
+          applyGlobeStyle(nextId);
+
+          const panelBtns = document.querySelectorAll('#style-buttons button');
+          panelBtns.forEach((b) => {
+            const isActive = b.dataset.styleId === nextId;
+            b.style.background = isActive ? '#ffd700' : '#222';
+            b.style.color = isActive ? '#000' : '#ddd';
+          });
+        });
+      })();
+
+      // --- Page transition: Globe → Ticket ---
+      (function initPageTransition() {
+        const reserveBtn = document.getElementById('reserve-btn');
+        const bottomPanel = document.getElementById('bottom-panel');
+        const vignette = document.getElementById('map-vignette');
+        const ticketFrame = document.getElementById('ticket-frame');
+        const globeStageEl = document.getElementById('globe-stage');
+        const backBtn = document.getElementById('page-back-btn');
+        let onTicketPage = false;
+
+        if (!reserveBtn || !ticketFrame) return;
+
+        function returnToHomePage() {
+          onTicketPage = false;
+          bottomPanel.style.opacity = '1';
+          bottomPanel.style.pointerEvents = '';
+          vignette.style.opacity = '1';
+          globeStageEl.style.opacity = '1';
+          ticketFrame.style.opacity = '0';
+          ticketFrame.style.pointerEvents = 'none';
+        }
+
+        reserveBtn.addEventListener('click', () => {
+          if (onTicketPage) return;
+          onTicketPage = true;
+
+          bottomPanel.style.opacity = '0';
+          bottomPanel.style.pointerEvents = 'none';
+          vignette.style.opacity = '0';
+          globeStageEl.style.transition = 'opacity 0.6s ease';
+          globeStageEl.style.opacity = '0';
+
+          ticketFrame.style.opacity = '1';
+          ticketFrame.style.pointerEvents = 'auto';
+
+          const airports = getCurrentAirports();
+          if (airports && activeAirportIndex >= 0 && activeAirportIndex < airports.length) {
+            const dest = airports[activeAirportIndex];
+            const info = AIRPORTS[dest.code] || {};
+            ticketFrame.contentWindow?.postMessage({
+              type: 'set-destination',
+              code: dest.code,
+              name: info.name || '',
+              english: info.english || '',
+            }, '*');
+          }
+
+          const selectedMinutes = TIME_NODES[selectedIndex].minutes;
+        });
+
+        if (backBtn) {
+          backBtn.addEventListener('click', () => {
+            if (!onTicketPage) return;
+            returnToHomePage();
+          });
+        }
+
+        window.addEventListener('message', (event) => {
+          if (event.data?.type === 'exit-to-home') {
+            returnToHomePage();
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

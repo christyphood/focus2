@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>airport-selection-1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @font-face {
+        font-family: 'JOOX Sans Brand';
+        src: url('./static/fonts/JOOXSansBrand-Regular.ttf') format('truetype');
+        font-weight: 400;
+        font-style: normal;
+        font-display: swap;
+      }
+      body {
+        font-family: 'JOOX Sans Brand', sans-serif;
+        margin: 0;
+        background: #020202;
+        display: flex;
+        justify-content: center;
+      }
+      #map-stage {
+        position: relative;
+        width: 375px;
+        height: 780.5px;
+        background: #020202;
+        overflow: hidden;
+      }
+      #map-canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 800px;
+        height: 1650px;
+        transform-origin: 0 0;
+        will-change: transform;
+      }
+      #map-canvas.is-animating {
+        transition: transform 1.15s cubic-bezier(0.22, 1, 0.36, 1);
+      }
+      .map-bg {
+        display: block;
+        width: 800px;
+        height: 1650px;
+        pointer-events: none;
+        user-select: none;
+      }
+      #map-markers {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+      .map-marker-dot {
+        position: absolute;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .map-vignette {
+        background: linear-gradient(
+          180deg,
+          rgba(2, 2, 2, 0.45) 0%,
+          rgba(2, 2, 2, 0.08) 38%,
+          rgba(2, 2, 2, 0.35) 72%,
+          rgba(2, 2, 2, 0.82) 100%
+        );
+      }
+      .airport-marker {
+        width: 10px;
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.85);
+        border: 2px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 0 12px rgba(255, 255, 255, 0.35);
+        transition: transform 0.25s ease, background 0.25s ease, box-shadow 0.25s ease;
+      }
+      .airport-marker.is-active {
+        width: 14px;
+        height: 14px;
+        background: rgb(255, 215, 0);
+        border-color: rgba(255, 255, 255, 0.9);
+        box-shadow: 0 0 18px rgba(255, 215, 0, 0.75);
+      }
+      .airport-marker-wrap {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 24px;
+        height: 24px;
+      }
+      #timeline-track {
+        touch-action: none;
+        cursor: grab;
+        user-select: none;
+        overflow: hidden;
+        position: relative;
+      }
+      #timeline-track:active {
+        cursor: grabbing;
+      }
+      #timeline-strip {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-end;
+        height: 46px;
+        will-change: transform;
+      }
+      .timeline-node {
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        height: 46px;
+        gap: 3.73px;
+      }
+      .time-label {
+        height: 13px;
+        line-height: 12.31px;
+        transition: color 0.18s ease, opacity 0.18s ease;
+      }
+      .time-tick-slot {
+        height: 29.5px;
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+      }
+      .time-tick {
+        width: 1.5px;
+        height: 14.5px;
+        border-radius: 0.93px;
+        background: rgb(255, 255, 255);
+        opacity: 0.3;
+        transition: opacity 0.18s ease;
+      }
+      .timeline-center-indicator {
+        position: absolute;
+        left: 50%;
+        bottom: 0;
+        transform: translateX(-50%);
+        pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3.73px;
+        z-index: 2;
+      }
+      .timeline-center-indicator .center-tick {
+        width: 1.5px;
+        height: 29.5px;
+        border-radius: 0.93px;
+        background: rgb(255, 215, 0);
+      }
+      .airport-card {
+        transition: border-color 0.25s ease, transform 0.25s ease, opacity 0.25s ease;
+      }
+      .airport-card.is-active {
+        border-color: rgb(255, 215, 0);
+      }
+      .airport-card.is-updating {
+        opacity: 0.55;
+        transform: scale(0.98);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="relative w-[375px] h-[815px] overflow-hidden bg-[rgb(2,2,2)]">
+      <div id="map-stage" class="absolute left-0 top-0 z-[1]">
+        <div id="map-canvas">
+          <img
+            src="./static/maps/sea-satellite.jpg"
+            alt=""
+            class="map-bg"
+            width="800"
+            height="1650"
+            draggable="false"
+          />
+          <div id="map-markers"></div>
+        </div>
+      </div>
+      <div class="map-vignette absolute left-0 top-0 z-[2] w-[375px] h-[780.5px] pointer-events-none"></div>
+
+      <!-- Top nav -->
+      <div class="absolute left-[25px] top-[53.5px] z-[3] flex flex-row items-center gap-x-[63.5px]">
+        <img
+          src="./static/back-btn_ac53cf.svg"
+          class="w-[40px] h-[40px] rounded-[20px] overflow-hidden"
+          style="object-fit: cover"
+          alt="Back"
+        />
+        <div
+          class="w-[118.5px] flex flex-row justify-center items-center gap-x-[7.08px] py-[9.45px] px-[14.17px] rounded-[118.08px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.1)] [backdrop-filter:blur(14.17px)]"
+        >
+          <div class="relative w-[16px] h-[16px] overflow-hidden">
+            <img
+              src="./static/Vector_769897.svg"
+              class="absolute left-[2px] top-[2px] w-[11px] h-[12px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div class="text-[14.17px] font-medium leading-[17px] text-white whitespace-nowrap">Study</div>
+        </div>
+        <img
+          src="./static/route-btn_1c6475.svg"
+          class="w-[40px] h-[40px] rounded-[20px] overflow-hidden"
+          style="object-fit: cover"
+          alt="Route"
+        />
+      </div>
+
+      <!-- Status bar -->
+      <div class="absolute left-0 top-0 z-[4] w-[375px] h-[41px] flex flex-row justify-between items-center px-[22.39px]">
+        <div class="text-[13.99px] font-semibold leading-[16.79px] text-white whitespace-nowrap">9:41</div>
+        <div class="flex flex-row items-center gap-x-[5.6px]">
+          <div class="relative w-[16.5px] h-[16.5px] overflow-hidden">
+            <img
+              src="./static/Vector_5fe579.svg"
+              class="absolute left-0 top-[4.5px] w-[12px] h-[10px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div class="relative w-[16.5px] h-[16.5px] overflow-hidden">
+            <img
+              src="./static/Vector_4878a4.svg"
+              class="absolute left-0 top-[2.5px] w-[15.5px] h-[12px]"
+              style="object-fit: cover"
+              alt=""
+            />
+          </div>
+          <div
+            class="w-[23px] h-[11px] flex flex-row p-[0.93px] rounded-[2.8px] border border-white"
+          >
+            <div class="w-[16.5px] h-[9px] rounded-[0.93px] bg-white"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom panel -->
+      <div class="absolute left-0 top-[500px] z-[5] w-[375px] flex flex-col gap-y-[18.66px] p-[22.39px]">
+        <!-- Airport cards -->
+        <div id="airport-row" class="self-stretch w-[330px] flex flex-row gap-x-[11.19px]">
+          <div
+            class="airport-card is-active flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="0"
+            data-code="HKG"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">HKG</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              香港国际机场
+            </div>
+          </div>
+          <div
+            class="airport-card flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="1"
+            data-code="MFM"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">MFM</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              澳门国际机场
+            </div>
+          </div>
+          <div
+            class="airport-card flex-1 flex flex-col gap-y-[7.46px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+            data-index="2"
+            data-code="SZX"
+          >
+            <div class="airport-code text-[18.66px] font-bold leading-[22.39px] text-white whitespace-nowrap">SZX</div>
+            <div class="airport-name text-[10px] font-bold leading-[12px] text-white opacity-60 whitespace-nowrap">
+              深圳宝安国际机场
+            </div>
+          </div>
+        </div>
+
+        <!-- Timeline panel -->
+        <div
+          class="self-stretch w-[330px] flex flex-col gap-y-[16px] p-[18.66px] rounded-[22.39px] bg-[rgba(255,255,255,0.1)] border border-[rgba(255,255,255,0.2)] [backdrop-filter:blur(18.66px)]"
+        >
+          <div class="self-stretch flex flex-col gap-y-[14.93px]">
+            <div id="timeline-track" class="relative self-stretch w-full h-[46px]">
+              <div id="timeline-strip"></div>
+              <div class="timeline-center-indicator" aria-hidden="true">
+                <div class="center-tick"></div>
+              </div>
+            </div>
+            <div class="self-stretch h-[1.5px] opacity-10 bg-white"></div>
+          </div>
+          <div
+            class="self-stretch h-[55.5px] flex flex-row justify-center items-center rounded-[93.28px] bg-white"
+          >
+            <div class="text-[16.79px] font-bold leading-[20.15px] text-black whitespace-nowrap">
+              Reserve Ticket
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const MAP = {
+        width: 800,
+        height: 1650,
+        viewportW: 375,
+        viewportH: 780.5,
+        bounds: { west: 95, south: -12, east: 125, north: 25 },
+      };
+
+      const AIRPORT_COORDS = {
+        SIN: [1.3644, 103.9915],
+        JHB: [1.6413, 103.6696],
+        BTH: [1.1214, 104.1183],
+        KUL: [2.7456, 101.7099],
+        PEN: [5.2971, 100.2769],
+        SZB: [3.1306, 101.5493],
+        BKK: [13.69, 100.7501],
+        DMK: [13.9126, 100.6068],
+        UTP: [12.6799, 101.005],
+        HKT: [8.1132, 98.3169],
+        KBV: [8.0991, 98.9862],
+        USM: [9.5478, 100.0623],
+        CGK: [-6.1256, 106.6558],
+        HLP: [-6.2666, 106.8911],
+        BDO: [-6.9006, 107.5766],
+        DPS: [-8.7482, 115.1672],
+        LOP: [-8.761, 116.2767],
+        SGN: [10.8188, 106.6519],
+        VCA: [10.0851, 105.7119],
+        PQC: [10.227, 103.9672],
+        HKG: [22.308, 113.9185],
+        MFM: [22.1496, 113.5916],
+        SZX: [22.6394, 113.8106],
+        MNL: [14.5086, 121.0198],
+        CRK: [15.186, 120.56],
+        LGP: [13.1575, 123.7347],
+        REP: [13.4107, 103.813],
+        PNH: [11.5466, 104.844],
+        BKI: [5.9372, 116.0512],
+        BWX: [-8.3103, 114.3402],
+      };
+
+      const TIME_NODES = [
+        { minutes: 10, label: '10m' },
+        { minutes: 15, label: '15m' },
+        { minutes: 20, label: '20m' },
+        { minutes: 25, label: '25m' },
+        { minutes: 30, label: '30m' },
+        { minutes: 35, label: '35m' },
+        { minutes: 40, label: '40m' },
+        { minutes: 45, label: '45m' },
+        { minutes: 50, label: '50m' },
+        { minutes: 55, label: '55m' },
+        { minutes: 60, label: '1h' },
+        { minutes: 90, label: '1h30m' },
+      ];
+
+      const ROUTES = {
+        10: [
+          { code: 'SIN', name: '新加坡樟宜机场' },
+          { code: 'JHB', name: '新山士乃国际机场' },
+          { code: 'BTH', name: '巴淡岛杭纳丁机场' },
+        ],
+        15: [
+          { code: 'BKK', name: '曼谷素万那普机场' },
+          { code: 'DMK', name: '曼谷廊曼国际机场' },
+          { code: 'UTP', name: '乌塔保国际机场' },
+        ],
+        20: [
+          { code: 'CGK', name: '雅加达苏加诺机场' },
+          { code: 'HLP', name: '雅加达哈利姆机场' },
+          { code: 'BDO', name: '万隆国际机场' },
+        ],
+        25: [
+          { code: 'SGN', name: '胡志明市新山一机场' },
+          { code: 'VCA', name: '芹苴国际机场' },
+          { code: 'PQC', name: '富国岛国际机场' },
+        ],
+        30: [
+          { code: 'HKG', name: '香港国际机场' },
+          { code: 'MFM', name: '澳门国际机场' },
+          { code: 'SZX', name: '深圳宝安国际机场' },
+        ],
+        35: [
+          { code: 'BKK', name: '曼谷素万那普机场' },
+          { code: 'DMK', name: '曼谷廊曼国际机场' },
+          { code: 'UTP', name: '乌塔保国际机场' },
+        ],
+        40: [
+          { code: 'SIN', name: '新加坡樟宜机场' },
+          { code: 'JHB', name: '新山士乃国际机场' },
+          { code: 'BTH', name: '巴淡岛杭纳丁机场' },
+        ],
+        45: [
+          { code: 'MNL', name: '马尼拉尼诺阿基诺机场' },
+          { code: 'CRK', name: '克拉克国际机场' },
+          { code: 'LGP', name: '黎牙实比国际机场' },
+        ],
+        50: [
+          { code: 'HKT', name: '普吉国际机场' },
+          { code: 'KBV', name: '甲米国际机场' },
+          { code: 'USM', name: '苏梅岛国际机场' },
+        ],
+        55: [
+          { code: 'KUL', name: '吉隆坡国际机场' },
+          { code: 'PEN', name: '槟城国际机场' },
+          { code: 'SZB', name: '梳邦苏丹阿都阿兹沙机场' },
+        ],
+        60: [
+          { code: 'DPS', name: '巴厘岛登巴萨机场' },
+          { code: 'LOP', name: '龙目岛国际机场' },
+          { code: 'BWX', name: '外南梦国际机场' },
+        ],
+        90: [
+          { code: 'BKK', name: '曼谷素万那普机场' },
+          { code: 'HKT', name: '普吉国际机场' },
+          { code: 'USM', name: '苏梅岛国际机场' },
+        ],
+      };
+
+      const NODE_STEP = 44;
+      let selectedIndex = 4;
+      let isDragging = false;
+      let dragStartX = 0;
+      let dragStartTranslate = 0;
+      let currentTranslate = 0;
+      let velocity = 0;
+      let lastMoveX = 0;
+      let lastMoveTime = 0;
+      let pendingIndex = 4;
+      let activeAirportIndex = 0;
+      let mapAnimationTimer = null;
+
+      const timelineTrack = document.getElementById('timeline-track');
+      const timelineStrip = document.getElementById('timeline-strip');
+      const airportCards = Array.from(document.querySelectorAll('.airport-card'));
+      const mapCanvas = document.getElementById('map-canvas');
+      const mapMarkers = document.getElementById('map-markers');
+
+      function latLngToPoint(lat, lng) {
+        const { west, east, south, north } = MAP.bounds;
+        const { width, height } = MAP;
+        return {
+          x: ((lng - west) / (east - west)) * width,
+          y: ((north - lat) / (north - south)) * height,
+        };
+      }
+
+      function getAirportPoint(code) {
+        const coords = AIRPORT_COORDS[code];
+        if (!coords) return null;
+        return latLngToPoint(coords[0], coords[1]);
+      }
+
+      function getOverviewView(points) {
+        const xs = points.map((p) => p.x);
+        const ys = points.map((p) => p.y);
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const boxW = Math.max(maxX - minX, 40);
+        const boxH = Math.max(maxY - minY, 40);
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const padding = 1.55;
+
+        const scale = Math.min(
+          MAP.viewportW / (boxW * padding),
+          MAP.viewportH / (boxH * padding),
+          2.6
+        );
+
+        return {
+          scale,
+          x: MAP.viewportW / 2 - centerX * scale,
+          y: MAP.viewportH / 2 - centerY * scale,
+        };
+      }
+
+      function getFocusView(code) {
+        const point = getAirportPoint(code);
+        if (!point) return null;
+        const scale = 3.15;
+        return {
+          scale,
+          x: MAP.viewportW / 2 - point.x * scale,
+          y: MAP.viewportH / 2 - point.y * scale,
+        };
+      }
+
+      function flyToView(view) {
+        mapCanvas.classList.remove('is-animating');
+        void mapCanvas.offsetWidth;
+        requestAnimationFrame(() => {
+          mapCanvas.classList.add('is-animating');
+          mapCanvas.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`;
+        });
+      }
+
+      function applyMapView(view, animate = true) {
+        if (animate) {
+          flyToView(view);
+          return;
+        }
+        mapCanvas.classList.remove('is-animating');
+        mapCanvas.style.transform = `translate3d(${view.x}px, ${view.y}px, 0) scale(${view.scale})`;
+      }
+
+      function stopMapAnimation() {
+        if (mapAnimationTimer) {
+          clearTimeout(mapAnimationTimer);
+          mapAnimationTimer = null;
+        }
+        mapCanvas.classList.remove('is-animating');
+      }
+
+      function getCurrentAirports() {
+        const time = TIME_NODES[selectedIndex].minutes;
+        return ROUTES[time];
+      }
+
+      function renderMarkers(airports, activeIndex) {
+        mapMarkers.innerHTML = airports
+          .map((airport, index) => {
+            const point = getAirportPoint(airport.code);
+            if (!point) return '';
+            const active = index === activeIndex;
+            return `
+              <div class="map-marker-dot" style="left:${point.x}px;top:${point.y}px">
+                <div class="airport-marker-wrap">
+                  <div class="airport-marker${active ? ' is-active' : ''}"></div>
+                </div>
+              </div>
+            `;
+          })
+          .join('');
+      }
+
+      function animateRouteView(airports, activeIndex, withOverview = true) {
+        stopMapAnimation();
+        renderMarkers(airports, activeIndex);
+
+        const points = airports.map((a) => getAirportPoint(a.code)).filter(Boolean);
+        if (!points.length) return;
+
+        const overviewView = getOverviewView(points);
+        const focusView = getFocusView(airports[activeIndex].code);
+        if (!focusView) return;
+
+        if (withOverview) {
+          flyToView(overviewView);
+          mapAnimationTimer = window.setTimeout(() => {
+            flyToView(focusView);
+          }, 1200);
+        } else {
+          applyMapView(focusView, false);
+        }
+      }
+
+      function focusAirport(code, cardIndex) {
+        activeAirportIndex = cardIndex;
+        const airports = getCurrentAirports();
+        renderMarkers(airports, cardIndex);
+        stopMapAnimation();
+        const focusView = getFocusView(code);
+        if (focusView) flyToView(focusView);
+      }
+
+      function initMap() {
+        const airports = getCurrentAirports();
+        const points = airports.map((a) => getAirportPoint(a.code)).filter(Boolean);
+        if (!points.length) return;
+        renderMarkers(airports, activeAirportIndex);
+        applyMapView(getFocusView(airports[activeAirportIndex].code), false);
+      }
+
+      function getTrackWidth() {
+        return timelineTrack.clientWidth;
+      }
+
+      function translateForIndex(index) {
+        return getTrackWidth() / 2 - index * NODE_STEP - NODE_STEP / 2;
+      }
+
+      function clampTranslate(value) {
+        const min = translateForIndex(TIME_NODES.length - 1);
+        const max = translateForIndex(0);
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function indexFromTranslate(translate) {
+        const centerPos = getTrackWidth() / 2 - translate - NODE_STEP / 2;
+        return Math.max(0, Math.min(TIME_NODES.length - 1, Math.round(centerPos / NODE_STEP)));
+      }
+
+      function applyStripTransform(animate) {
+        timelineStrip.style.transition = animate
+          ? 'transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)'
+          : 'none';
+        timelineStrip.style.transform = `translate3d(${currentTranslate}px, 0, 0)`;
+      }
+
+      function updateNodeStyles(highlightIndex = selectedIndex) {
+        timelineStrip.querySelectorAll('.timeline-node').forEach((node, index) => {
+          const active = index === highlightIndex;
+          const label = node.querySelector('.time-label');
+          const tick = node.querySelector('.time-tick');
+          label.style.color = active ? 'rgb(255, 215, 0)' : 'rgb(255, 255, 255)';
+          label.style.opacity = active ? '1' : '0.55';
+          tick.style.opacity = active ? '0' : '0.3';
+        });
+      }
+
+      function renderTimeline() {
+        timelineStrip.innerHTML = TIME_NODES.map(
+          (node, index) => `
+            <div class="timeline-node" data-index="${index}" style="width: ${NODE_STEP}px">
+              <div class="time-label text-[10.26px] font-bold whitespace-nowrap">${node.label}</div>
+              <div class="time-tick-slot">
+                <div class="time-tick"></div>
+              </div>
+            </div>
+          `
+        ).join('');
+
+        currentTranslate = translateForIndex(selectedIndex);
+        applyStripTransform(false);
+        updateNodeStyles();
+      }
+
+      function snapToIndex(index, animate = true) {
+        const next = Math.max(0, Math.min(TIME_NODES.length - 1, index));
+        const changed = next !== selectedIndex;
+        selectedIndex = next;
+        currentTranslate = translateForIndex(selectedIndex);
+        applyStripTransform(animate);
+        updateNodeStyles();
+        if (changed) updateAirports();
+      }
+
+      function updateAirports() {
+        const time = TIME_NODES[selectedIndex].minutes;
+        const airports = ROUTES[time];
+        activeAirportIndex = 0;
+
+        airportCards.forEach((card) => card.classList.add('is-updating'));
+
+        window.setTimeout(() => {
+          airportCards.forEach((card, i) => {
+            const airport = airports[i];
+            const codeEl = card.querySelector('.airport-code');
+            const nameEl = card.querySelector('.airport-name');
+            codeEl.textContent = airport.code;
+            nameEl.textContent = airport.name;
+            card.dataset.code = airport.code;
+            card.classList.toggle('is-active', i === 0);
+            card.classList.remove('is-updating');
+          });
+          animateRouteView(airports, 0, true);
+        }, 120);
+      }
+
+      function onPointerDown(event) {
+        isDragging = true;
+        dragStartX = event.clientX;
+        dragStartTranslate = currentTranslate;
+        lastMoveX = event.clientX;
+        lastMoveTime = performance.now();
+        velocity = 0;
+        pendingIndex = selectedIndex;
+        timelineStrip.style.transition = 'none';
+        timelineTrack.setPointerCapture(event.pointerId);
+      }
+
+      function onPointerMove(event) {
+        if (!isDragging) return;
+        const now = performance.now();
+        const delta = event.clientX - dragStartX;
+        currentTranslate = clampTranslate(dragStartTranslate + delta);
+        applyStripTransform(false);
+
+        const dt = now - lastMoveTime;
+        if (dt > 0) {
+          velocity = (event.clientX - lastMoveX) / dt;
+        }
+        lastMoveX = event.clientX;
+        lastMoveTime = now;
+
+        const previewIndex = indexFromTranslate(currentTranslate);
+        if (previewIndex !== pendingIndex) {
+          pendingIndex = previewIndex;
+          updateNodeStyles(previewIndex);
+        }
+      }
+
+      function onPointerUp(event) {
+        if (!isDragging) return;
+        isDragging = false;
+        timelineTrack.releasePointerCapture(event.pointerId);
+
+        const inertiaOffset = velocity * 120;
+        const targetTranslate = clampTranslate(currentTranslate + inertiaOffset);
+        const targetIndex = indexFromTranslate(targetTranslate);
+        snapToIndex(targetIndex, true);
+      }
+
+      timelineTrack.addEventListener('pointerdown', onPointerDown);
+      timelineTrack.addEventListener('pointermove', onPointerMove);
+      timelineTrack.addEventListener('pointerup', onPointerUp);
+      timelineTrack.addEventListener('pointercancel', onPointerUp);
+
+      window.addEventListener('resize', () => {
+        renderTimeline();
+        snapToIndex(selectedIndex, false);
+      });
+
+      airportCards.forEach((card) => {
+        card.addEventListener('click', () => {
+          const index = Number(card.dataset.index);
+          const code = card.dataset.code || card.querySelector('.airport-code').textContent.trim();
+          airportCards.forEach((c, i) => c.classList.toggle('is-active', i === index));
+          focusAirport(code, index);
+        });
+      });
+
+      renderTimeline();
+      initMap();
+    </script>
+  </body>
+</html>
