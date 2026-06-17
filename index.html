@@ -1982,6 +1982,7 @@
 
         function returnToHomePage() {
           onTicketPage = false;
+          ticketFrame.contentWindow?.postMessage({ type: 'ticket-reset' }, '*');
           bottomPanel.style.opacity = '1';
           bottomPanel.style.pointerEvents = '';
           vignette.style.opacity = '1';
@@ -2002,6 +2003,8 @@
 
           ticketFrame.style.opacity = '1';
           ticketFrame.style.pointerEvents = 'auto';
+
+          ticketFrame.contentWindow?.postMessage({ type: 'start-ticket-flow' }, '*');
 
           const airports = getCurrentAirports();
           if (airports && activeAirportIndex >= 0 && activeAirportIndex < airports.length) {
