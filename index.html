@@ -398,6 +398,7 @@
       let lastMoveTime = 0;
       let pendingIndex = 4;
       let activeAirportIndex = -1;
+      let hasManualAirportSelection = false;
       let globeAnimationTimer = null;
       let routeInteractionStarted = false;
 
@@ -1419,6 +1420,13 @@
         showFlightRoute(code);
       }
 
+      function selectAirportAtIndex(index) {
+        const airports = getCurrentAirports();
+        if (!airports || index < 0 || index >= airports.length) return;
+        airportCards.forEach((c, i) => c.classList.toggle('is-active', i === index));
+        focusAirport(airports[index].code, index);
+      }
+
       function initGlobe() {
         const width = globeStage.clientWidth;
         const height = globeStage.clientHeight;
@@ -1690,9 +1698,13 @@
             card.classList.remove('is-active');
             card.classList.remove('is-updating');
           });
-          clearFlightArc();
-          GLOBE.routePaused = false;
-          GLOBE.idleSpeed = BASE_IDLE_SPEED;
+          if (!hasManualAirportSelection) {
+            selectAirportAtIndex(0);
+          } else {
+            clearFlightArc();
+            GLOBE.routePaused = false;
+            GLOBE.idleSpeed = BASE_IDLE_SPEED;
+          }
         }, 120);
       }
 
@@ -1759,10 +1771,9 @@
 
       airportCards.forEach((card) => {
         card.addEventListener('click', () => {
+          hasManualAirportSelection = true;
           const index = Number(card.dataset.index);
-          const code = card.dataset.code || card.querySelector('.airport-code').textContent.trim();
-          airportCards.forEach((c, i) => c.classList.toggle('is-active', i === index));
-          focusAirport(code, index);
+          selectAirportAtIndex(index);
         });
       });
 
