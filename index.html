@@ -568,6 +568,15 @@
         };
       }
 
+      function shortestAngleDelta(from, to) {
+        return Math.atan2(Math.sin(to - from), Math.cos(to - from));
+      }
+
+      function setGlobeRotationTarget(rotation) {
+        GLOBE.targetRotation.x = GLOBE.currentRotation.x + shortestAngleDelta(GLOBE.currentRotation.x, rotation.x);
+        GLOBE.targetRotation.y = GLOBE.currentRotation.y + shortestAngleDelta(GLOBE.currentRotation.y, rotation.y);
+      }
+
       function centerLatLng(airports) {
         const coords = airports
           .map((airport) => AIRPORT_COORDS[airport.code])
@@ -1129,8 +1138,7 @@
         if (!to) return false;
 
         const rotation = rotationForLatLng(to[0], to[1]);
-        GLOBE.targetRotation.x = rotation.x;
-        GLOBE.targetRotation.y = rotation.y;
+        setGlobeRotationTarget(rotation);
         GLOBE.isAnimating = true;
         GLOBE.routePaused = true;
 
@@ -1186,9 +1194,7 @@
       }
 
       function setGlobeTarget(lat, lng, cameraZ) {
-        const rotation = rotationForLatLng(lat, lng);
-        GLOBE.targetRotation.x = rotation.x;
-        GLOBE.targetRotation.y = rotation.y;
+        setGlobeRotationTarget(rotationForLatLng(lat, lng));
         GLOBE.targetCameraZ = cameraZ;
         GLOBE.isAnimating = true;
       }
@@ -1512,8 +1518,8 @@
           lastFrameTime = now;
 
           const ease = GLOBE.isAnimating ? 0.055 : 0.035;
-          GLOBE.currentRotation.x += (GLOBE.targetRotation.x - GLOBE.currentRotation.x) * ease;
-          GLOBE.currentRotation.y += (GLOBE.targetRotation.y - GLOBE.currentRotation.y) * ease;
+          GLOBE.currentRotation.x += shortestAngleDelta(GLOBE.currentRotation.x, GLOBE.targetRotation.x) * ease;
+          GLOBE.currentRotation.y += shortestAngleDelta(GLOBE.currentRotation.y, GLOBE.targetRotation.y) * ease;
           GLOBE.currentCameraZ += (GLOBE.targetCameraZ - GLOBE.currentCameraZ) * (GLOBE.isAnimating ? 0.048 : 0.035);
 
           if (!GLOBE.isAnimating && !globeAnimationTimer && !routeInteractionStarted && !GLOBE.routePaused) {
@@ -1556,8 +1562,8 @@
           applyGlobeLayout();
 
           const animatingRotation =
-            Math.abs(GLOBE.targetRotation.x - GLOBE.currentRotation.x) > 0.001 ||
-            Math.abs(GLOBE.targetRotation.y - GLOBE.currentRotation.y) > 0.001 ||
+            Math.abs(shortestAngleDelta(GLOBE.currentRotation.x, GLOBE.targetRotation.x)) > 0.001 ||
+            Math.abs(shortestAngleDelta(GLOBE.currentRotation.y, GLOBE.targetRotation.y)) > 0.001 ||
             Math.abs(GLOBE.targetCameraZ - GLOBE.currentCameraZ) > 0.01;
 
           if (GLOBE.isAnimating && !animatingRotation && !globeAnimationTimer) {
